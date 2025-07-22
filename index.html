@@ -1,16 +1,79 @@
+
 <!DOCTYPE html>
-<html>
-
+<html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width">
-  <title>replit</title>
-  <link href="style.css" rel="stylesheet" type="text/css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formulário de Contagem de Estoque</title>
+    <link href="style.css" rel="stylesheet" type="text/css" />
 </head>
-
 <body>
-  Hello world
-  <script src="script.js"></script>
-</body>
+    <div class="container">
+        <h1>Formulário de Contagem de Estoque</h1>
+        <form id="stockForm">
+            <div class="form-group">
+                <label for="user">Usuário:</label>
+                <select id="user" name="user" required>
+                    <option value="">Selecione um usuário</option>
+                    <option value="João Silva">João Silva</option>
+                    <option value="Maria Santos">Maria Santos</option>
+                    <option value="Pedro Costa">Pedro Costa</option>
+                    <option value="Ana Oliveira">Ana Oliveira</option>
+                    <option value="Carlos Ferreira">Carlos Ferreira</option>
+                </select>
+            </div>
 
+            <div class="form-group">
+                <label for="network">Rede de Lojas:</label>
+                <select id="network" name="network" required onchange="updateStores()">
+                    <option value="">Selecione uma rede</option>
+                    <option value="Rede Norte">Rede Norte</option>
+                    <option value="Rede Sul">Rede Sul</option>
+                    <option value="Rede Centro">Rede Centro</option>
+                    <option value="Rede Leste">Rede Leste</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="store">Loja:</label>
+                <select id="store" name="store" required>
+                    <option value="">Selecione uma loja</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="productType">Tipo do Produto:</label>
+                <input type="text" id="productType" name="productType" required placeholder="Ex: Camiseta, Calça, Tênis">
+            </div>
+
+            <div class="form-group">
+                <label for="boxType">Tipo de Caixa:</label>
+                <select id="boxType" name="boxType" required>
+                    <option value="">Selecione o tipo de caixa</option>
+                    <option value="Pequena">Pequena</option>
+                    <option value="Média">Média</option>
+                    <option value="Grande">Grande</option>
+                    <option value="Extra Grande">Extra Grande</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="quantity">Quantidade de Caixas:</label>
+                <input type="number" id="quantity" name="quantity" required min="0" placeholder="0">
+            </div>
+
+            <button type="submit">Adicionar Item</button>
+        </form>
+
+        <div id="itemsList">
+            <h2>Itens Adicionados</h2>
+            <div id="items"></div>
+            <button id="submitAll" style="display: none;" onclick="submitInventory()">Enviar Inventário</button>
+        </div>
+
+        <div id="status"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
 </html>
