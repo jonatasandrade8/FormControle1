@@ -963,6 +963,111 @@ button:hover {
     background-color: #c82333;
 }
 
+/* Estilos para seleção múltipla */
+.list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.list-header h5 {
+    margin: 0;
+    color: #6c757d;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.bulk-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.bulk-actions button {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 4px;
+    margin: 0;
+}
+
+.remove-selected-btn {
+    background-color: #dc3545 !important;
+    color: white !important;
+}
+
+.remove-selected-btn:hover {
+    background-color: #c82333 !important;
+}
+
+.item-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    flex-grow: 1;
+}
+
+.item-checkbox input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    padding: 0;
+    accent-color: #16a34a;
+}
+
+.item-checkbox span {
+    font-weight: 500;
+    color: #495057;
+}
+
+.list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+}
+
+/* Estilos para botão salvar configurações */
+.save-config-section {
+    background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+    color: white;
+    padding: 25px;
+    border-radius: 10px;
+    text-align: center;
+    margin-top: 30px;
+    box-shadow: 0 4px 15px rgba(22, 163, 74, 0.3);
+}
+
+.save-config-btn {
+    background-color: #ffffff;
+    color: #16a34a;
+    font-size: 18px;
+    font-weight: bold;
+    padding: 15px 40px;
+    border: 2px solid #ffffff;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.save-config-btn:hover {
+    background-color: #f0fdf4;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.save-config-description {
+    color: #dcfce7;
+    font-size: 14px;
+    margin: 0;
+    font-style: italic;
+}
+
 /* Responsividade */
 @media (max-width: 768px) {
     .container {
@@ -1061,5 +1166,31 @@ button:hover {
 
     .item-quantity {
         text-align: left;
+    }
+
+    .list-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .bulk-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .bulk-actions button {
+        flex: 1;
+        font-size: 11px;
+        padding: 5px 8px;
+    }
+
+    .save-config-btn {
+        font-size: 16px;
+        padding: 12px 30px;
+    }
+
+    .item-checkbox {
+        gap: 5px;
     }
 }

@@ -1293,7 +1293,10 @@ function updateUsersList() {
             systemConfig.usersByState[state].forEach(user => {
                 html += `
                     <div class="list-item network-item">
-                        <span>${user}</span>
+                        <label class="item-checkbox">
+                            <input type="checkbox" data-username="${user}" data-state="${state}">
+                            <span>${user}</span>
+                        </label>
                         <button onclick="removeUser('${user}', '${state}')">Remover</button>
                     </div>
                 `;
@@ -1359,7 +1362,10 @@ function updateStatesList() {
     Object.keys(networksByState).forEach(state => {
         html += `
             <div class="list-item state-header">
-                <span>${state}</span>
+                <label class="item-checkbox">
+                    <input type="checkbox" data-state="${state}">
+                    <span>${state}</span>
+                </label>
                 <button onclick="removeState('${state}')">Remover</button>
             </div>
         `;
@@ -1449,7 +1455,10 @@ function updateNetworksList() {
             networksByState[state].forEach(network => {
                 html += `
                     <div class="list-item network-item">
-                        <span>${network}</span>
+                        <label class="item-checkbox">
+                            <input type="checkbox" data-network="${network}">
+                            <span>${network}</span>
+                        </label>
                         <button onclick="removeNetwork('${network}')">Remover</button>
                     </div>
                 `;
@@ -1514,7 +1523,10 @@ function updateStoresList() {
             storesByNetwork[network].forEach(store => {
                 html += `
                     <div class="list-item store-item">
-                        <span>${store}</span>
+                        <label class="item-checkbox">
+                            <input type="checkbox" data-store="${store}">
+                            <span>${store}</span>
+                        </label>
                         <button onclick="removeStore('${store}')">Remover</button>
                     </div>
                 `;
@@ -1600,7 +1612,10 @@ function updateEmailsList() {
         html += `
             <div class="email-item">
                 <div class="email-info">
-                    <span class="email-address">${email.address}</span>
+                    <label class="item-checkbox">
+                        <input type="checkbox" data-email="${email.address}">
+                        <span class="email-address">${email.address}</span>
+                    </label>
                     <div class="email-options">
                         <label class="email-checkbox">
                             <input type="checkbox" ${email.inventory ? 'checked' : ''} 
@@ -2338,6 +2353,226 @@ function hideAllNetworks() {
 function hideAllStores() {
     document.getElementById('searchStore').value = '';
     document.getElementById('storesList').innerHTML = '<p>Lista ocultada. Clique em "Exibir Todos" para visualizar.</p>';
+}
+
+// Função para salvar todas as configurações
+function saveAllConfigurations() {
+    try {
+        // Salvar configurações de horário primeiro
+        saveScheduleSettings();
+        
+        // Atualizar todos os selects do sistema
+        updateConfigSelects();
+        updateStateSelects();
+        updateUserSelects();
+        updateStoreSelects();
+        
+        // Atualizar selects nas abas principais
+        updateNetworksByState();
+        updateUsersByState();
+        updateDryNetworksByState();
+        updateDryUsersByState();
+        
+        // Atualizar visualizações de dados e usuários pendentes
+        initializeDataView();
+        updatePendingView();
+        
+        // Atualizar visualização do gestor
+        updateManagerView();
+        
+        showStatus('Todas as configurações foram salvas e o sistema foi atualizado!', 'success');
+        
+        console.log('Configurações salvas:', {
+            schedule: {
+                inventoryTime: systemConfig.inventoryTime,
+                inventoryDays: systemConfig.inventoryDays,
+                dryBoxesTime: systemConfig.dryBoxesTime,
+                dryBoxesDays: systemConfig.dryBoxesDays
+            },
+            usersByState: systemConfig.usersByState,
+            emails: systemConfig.emails,
+            networksByState: networksByState,
+            storesByNetwork: storesByNetwork
+        });
+        
+    } catch (error) {
+        console.error('Erro ao salvar configurações:', error);
+        showStatus('Erro ao salvar algumas configurações. Verifique o console para detalhes.', 'error');
+    }
+}
+
+// Funções para seleção múltipla de usuários
+function selectAllUsers() {
+    const checkboxes = document.querySelectorAll('#usersList input[type="checkbox"]');
+    checkboxes.forEach(checkbox => checkbox.checked = true);
+}
+
+function deselectAllUsers() {
+    const checkboxes = document.querySelectorAll('#usersList input[type="checkbox"]');
+    checkboxes.forEach(checkbox => checkbox.checked = false);
+}
+
+function removeSelectedUsers() {
+    const selectedItems = document.querySelectorAll('#usersList input[type="checkbox"]:checked');
+    
+    if (selectedItems.length === 0) {
+        showStatus('Selecione pelo menos um usuário para remover!', 'error');
+        return;
+    }
+    
+    if (confirm(`Tem certeza que deseja remover ${selectedItems.length} usuário(s) selecionado(s)?`)) {
+        selectedItems.forEach(checkbox => {
+            const username = checkbox.dataset.username;
+            const state = checkbox.dataset.state;
+            
+            if (systemConfig.usersByState[state]) {
+                systemConfig.usersByState[state] = systemConfig.usersByState[state].filter(user => user !== username);
+            }
+        });
+        
+        updateUsersList();
+        updateUserSelects();
+        showStatus(`${selectedItems.length} usuário(s) removido(s) com sucesso!`, 'success');
+    }
+}
+
+// Funções para seleção múltipla de estados
+function selectAllStates() {
+    const checkboxes = document.querySelectorAll('#statesList input[type="checkbox"]');
+    checkboxes.forEach(checkbox => checkbox.checked = true);
+}
+
+function deselectAllStates() {
+    const checkboxes = document.querySelectorAll('#statesList input[type="checkbox"]');
+    checkboxes.forEach(checkbox => checkbox.checked = false);
+}
+
+function removeSelectedStates() {
+    const selectedItems = document.querySelectorAll('#statesList input[type="checkbox"]:checked');
+    
+    if (selectedItems.length === 0) {
+        showStatus('Selecione pelo menos um estado para remover!', 'error');
+        return;
+    }
+    
+    if (confirm(`Tem certeza que deseja remover ${selectedItems.length} estado(s) selecionado(s) e todas suas redes?`)) {
+        selectedItems.forEach(checkbox => {
+            const stateName = checkbox.dataset.state;
+            
+            // Remover todas as redes associadas ao estado
+            if (networksByState[stateName]) {
+                networksByState[stateName].forEach(network => {
+                    delete storesByNetwork[network];
+                });
+            }
+            
+            delete networksByState[stateName];
+        });
+        
+        updateStatesList();
+        showStatus(`${selectedItems.length} estado(s) removido(s) com sucesso!`, 'success');
+    }
+}
+
+// Funções para seleção múltipla de redes
+function selectAllNetworks() {
+    const checkboxes = document.querySelectorAll('#networksList input[type="checkbox"]');
+    checkboxes.forEach(checkbox => checkbox.checked = true);
+}
+
+function deselectAllNetworks() {
+    const checkboxes = document.querySelectorAll('#networksList input[type="checkbox"]');
+    checkboxes.forEach(checkbox => checkbox.checked = false);
+}
+
+function removeSelectedNetworks() {
+    const selectedItems = document.querySelectorAll('#networksList input[type="checkbox"]:checked');
+    
+    if (selectedItems.length === 0) {
+        showStatus('Selecione pelo menos uma rede para remover!', 'error');
+        return;
+    }
+    
+    if (confirm(`Tem certeza que deseja remover ${selectedItems.length} rede(s) selecionada(s) e todas suas lojas?`)) {
+        selectedItems.forEach(checkbox => {
+            const networkName = checkbox.dataset.network;
+            
+            // Remover das redes por estado
+            Object.keys(networksByState).forEach(state => {
+                networksByState[state] = networksByState[state].filter(network => network !== networkName);
+            });
+            
+            // Remover das lojas por rede
+            delete storesByNetwork[networkName];
+        });
+        
+        updateNetworksList();
+        updateConfigSelects();
+        showStatus(`${selectedItems.length} rede(s) removida(s) com sucesso!`, 'success');
+    }
+}
+
+// Funções para seleção múltipla de lojas
+function selectAllStores() {
+    const checkboxes = document.querySelectorAll('#storesList input[type="checkbox"]');
+    checkboxes.forEach(checkbox => checkbox.checked = true);
+}
+
+function deselectAllStores() {
+    const checkboxes = document.querySelectorAll('#storesList input[type="checkbox"]');
+    checkboxes.forEach(checkbox => checkbox.checked = false);
+}
+
+function removeSelectedStores() {
+    const selectedItems = document.querySelectorAll('#storesList input[type="checkbox"]:checked');
+    
+    if (selectedItems.length === 0) {
+        showStatus('Selecione pelo menos uma loja para remover!', 'error');
+        return;
+    }
+    
+    if (confirm(`Tem certeza que deseja remover ${selectedItems.length} loja(s) selecionada(s)?`)) {
+        selectedItems.forEach(checkbox => {
+            const storeName = checkbox.dataset.store;
+            
+            Object.keys(storesByNetwork).forEach(network => {
+                storesByNetwork[network] = storesByNetwork[network].filter(store => store !== storeName);
+            });
+        });
+        
+        updateStoresList();
+        showStatus(`${selectedItems.length} loja(s) removida(s) com sucesso!`, 'success');
+    }
+}
+
+// Funções para seleção múltipla de emails
+function selectAllEmails() {
+    const checkboxes = document.querySelectorAll('#emailsList input[type="checkbox"]');
+    checkboxes.forEach(checkbox => checkbox.checked = true);
+}
+
+function deselectAllEmails() {
+    const checkboxes = document.querySelectorAll('#emailsList input[type="checkbox"]');
+    checkboxes.forEach(checkbox => checkbox.checked = false);
+}
+
+function removeSelectedEmails() {
+    const selectedItems = document.querySelectorAll('#emailsList input[type="checkbox"]:checked');
+    
+    if (selectedItems.length === 0) {
+        showStatus('Selecione pelo menos um email para remover!', 'error');
+        return;
+    }
+    
+    if (confirm(`Tem certeza que deseja remover ${selectedItems.length} email(s) selecionado(s)?`)) {
+        selectedItems.forEach(checkbox => {
+            const emailAddress = checkbox.dataset.email;
+            systemConfig.emails = systemConfig.emails.filter(e => e.address !== emailAddress);
+        });
+        
+        updateEmailsList();
+        showStatus(`${selectedItems.length} email(s) removido(s) com sucesso!`, 'success');
+    }
 }
 
 // Inicialização
