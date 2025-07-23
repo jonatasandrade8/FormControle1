@@ -33,6 +33,12 @@ let submissionStatus = {
     dryBoxes: {}
 };
 
+// Senha dos gestores (em produção, isso deveria estar no backend)
+const MANAGER_PASSWORD = "gestor123";
+
+// Estado de autenticação do gestor
+let managerAuthenticated = false;
+
 // Função para mostrar/esconder abas
 function showTab(tabName) {
     // Esconder todas as abas
@@ -49,9 +55,9 @@ function showTab(tabName) {
     document.getElementById(tabName + 'Tab').classList.add('active');
     event.target.classList.add('active');
     
-    // Atualizar visualização se for a aba de gestor
+    // Verificar autenticação se for a aba de gestor
     if (tabName === 'manager') {
-        updateManagerView();
+        checkManagerAuthentication();
     }
 }
 
@@ -561,6 +567,54 @@ function showStatus(message, type) {
         }, 3000);
     }
 }
+
+// Funções de autenticação do gestor
+function checkManagerAuthentication() {
+    const loginDiv = document.getElementById('managerLogin');
+    const managerArea = document.getElementById('managerArea');
+    
+    if (managerAuthenticated) {
+        loginDiv.style.display = 'none';
+        managerArea.style.display = 'block';
+        updateManagerView();
+    } else {
+        loginDiv.style.display = 'block';
+        managerArea.style.display = 'none';
+    }
+}
+
+function authenticateManager(password) {
+    if (password === MANAGER_PASSWORD) {
+        managerAuthenticated = true;
+        document.getElementById('loginError').style.display = 'none';
+        checkManagerAuthentication();
+        showStatus('Login realizado com sucesso!', 'success');
+        return true;
+    } else {
+        document.getElementById('loginError').style.display = 'block';
+        showStatus('Senha incorreta!', 'error');
+        return false;
+    }
+}
+
+function logoutManager() {
+    managerAuthenticated = false;
+    document.getElementById('managerPassword').value = '';
+    document.getElementById('loginError').style.display = 'none';
+    checkManagerAuthentication();
+    showStatus('Logout realizado com sucesso!', 'success');
+}
+
+// Event listeners para login/logout
+document.getElementById('managerLoginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const password = document.getElementById('managerPassword').value;
+    authenticateManager(password);
+});
+
+document.getElementById('logoutManager').addEventListener('click', function() {
+    logoutManager();
+});
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', function() {

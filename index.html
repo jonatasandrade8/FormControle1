@@ -181,36 +181,61 @@
         <div id="managerTab" class="tab-content">
             <h2>Visualização de Estoques - Gestores</h2>
             
-            <div class="manager-filters">
-                <div class="form-group">
-                    <label for="managerState">Filtrar por Estado:</label>
-                    <select id="managerState" onchange="updateManagerView()">
-                        <option value="">Todos os estados</option>
-                        <option value="Rio Grande do Norte">Rio Grande do Norte</option>
-                        <option value="São Paulo">São Paulo</option>
-                        <option value="Rio de Janeiro">Rio de Janeiro</option>
-                        <option value="Minas Gerais">Minas Gerais</option>
-                        <option value="Bahia">Bahia</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="managerNetwork">Filtrar por Rede:</label>
-                    <select id="managerNetwork" onchange="updateManagerView()">
-                        <option value="">Todas as redes</option>
-                    </select>
+            <!-- Tela de login para gestores -->
+            <div id="managerLogin" class="manager-login">
+                <div class="login-container">
+                    <h3>Acesso Restrito - Gestores</h3>
+                    <form id="managerLoginForm">
+                        <div class="form-group">
+                            <label for="managerPassword">Senha:</label>
+                            <input type="password" id="managerPassword" name="managerPassword" required placeholder="Digite a senha de gestor">
+                        </div>
+                        <button type="submit">Entrar</button>
+                    </form>
+                    <div id="loginError" class="login-error" style="display: none;">
+                        Senha incorreta. Tente novamente.
+                    </div>
                 </div>
             </div>
-
-            <div id="managerView">
-                <div id="inventoryView">
-                    <h3>Inventário Diário</h3>
-                    <div id="managerInventoryData"></div>
+            
+            <!-- Área dos gestores (oculta inicialmente) -->
+            <div id="managerArea" style="display: none;">
+                <div class="manager-header">
+                    <h3>Área dos Gestores</h3>
+                    <button id="logoutManager" class="logout-btn">Sair</button>
                 </div>
                 
-                <div id="dryBoxesView">
-                    <h3>Caixas Secas</h3>
-                    <div id="managerDryBoxesData"></div>
+                <div class="manager-filters">
+                    <div class="form-group">
+                        <label for="managerState">Filtrar por Estado:</label>
+                        <select id="managerState" onchange="updateManagerView()">
+                            <option value="">Todos os estados</option>
+                            <option value="Rio Grande do Norte">Rio Grande do Norte</option>
+                            <option value="São Paulo">São Paulo</option>
+                            <option value="Rio de Janeiro">Rio de Janeiro</option>
+                            <option value="Minas Gerais">Minas Gerais</option>
+                            <option value="Bahia">Bahia</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="managerNetwork">Filtrar por Rede:</label>
+                        <select id="managerNetwork" onchange="updateManagerView()">
+                            <option value="">Todas as redes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="managerView">
+                    <div id="inventoryView">
+                        <h3>Inventário Diário</h3>
+                        <div id="managerInventoryData"></div>
+                    </div>
+                    
+                    <div id="dryBoxesView">
+                        <h3>Caixas Secas</h3>
+                        <div id="managerDryBoxesData"></div>
+                    </div>
                 </div>
             </div>
         </div>
