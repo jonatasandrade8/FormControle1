@@ -559,6 +559,10 @@ button:hover {
     margin-bottom: 15px;
 }
 
+.config-row:has(input[id*="search"]) {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
 .config-row .form-group {
     margin-bottom: 0;
 }

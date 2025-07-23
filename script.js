@@ -1276,6 +1276,176 @@ function updateEmailsList() {
     container.innerHTML = html;
 }
 
+// Funções de busca para usuários
+function searchUsers() {
+    const searchTerm = document.getElementById('searchUser').value.toLowerCase();
+    const container = document.getElementById('usersList');
+    
+    if (searchTerm === '') {
+        updateUsersList();
+        return;
+    }
+    
+    const filteredUsers = systemConfig.users.filter(user => 
+        user.toLowerCase().includes(searchTerm)
+    );
+    
+    let html = '';
+    filteredUsers.forEach(user => {
+        html += `
+            <div class="list-item">
+                <span>${user}</span>
+                <button onclick="removeUser('${user}')">Remover</button>
+            </div>
+        `;
+    });
+    
+    if (html === '') {
+        html = '<p>Nenhum usuário encontrado.</p>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function showAllUsers() {
+    document.getElementById('searchUser').value = '';
+    updateUsersList();
+}
+
+// Funções de busca para estados
+function searchStates() {
+    const searchTerm = document.getElementById('searchState').value.toLowerCase();
+    const container = document.getElementById('statesList');
+    
+    if (searchTerm === '') {
+        updateStatesList();
+        return;
+    }
+    
+    const filteredStates = Object.keys(networksByState).filter(state => 
+        state.toLowerCase().includes(searchTerm)
+    );
+    
+    let html = '';
+    filteredStates.forEach(state => {
+        html += `
+            <div class="list-item state-header">
+                <span>${state}</span>
+                <button onclick="removeState('${state}')">Remover</button>
+            </div>
+        `;
+    });
+    
+    if (html === '') {
+        html = '<p>Nenhum estado encontrado.</p>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function showAllStates() {
+    document.getElementById('searchState').value = '';
+    updateStatesList();
+}
+
+// Funções de busca para redes
+function searchNetworks() {
+    const searchTerm = document.getElementById('searchNetwork').value.toLowerCase();
+    const container = document.getElementById('networksList');
+    
+    if (searchTerm === '') {
+        updateNetworksList();
+        return;
+    }
+    
+    let html = '';
+    let foundAny = false;
+    
+    Object.keys(networksByState).forEach(state => {
+        const filteredNetworks = networksByState[state].filter(network => 
+            network.toLowerCase().includes(searchTerm)
+        );
+        
+        if (filteredNetworks.length > 0) {
+            foundAny = true;
+            html += `
+                <div class="list-item state-header">
+                    <span>${state}</span>
+                </div>
+            `;
+            
+            filteredNetworks.forEach(network => {
+                html += `
+                    <div class="list-item network-item">
+                        <span>${network}</span>
+                        <button onclick="removeNetwork('${network}')">Remover</button>
+                    </div>
+                `;
+            });
+        }
+    });
+    
+    if (!foundAny) {
+        html = '<p>Nenhuma rede encontrada.</p>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function showAllNetworks() {
+    document.getElementById('searchNetwork').value = '';
+    updateNetworksList();
+}
+
+// Funções de busca para lojas
+function searchStores() {
+    const searchTerm = document.getElementById('searchStore').value.toLowerCase();
+    const container = document.getElementById('storesList');
+    
+    if (searchTerm === '') {
+        updateStoresList();
+        return;
+    }
+    
+    let html = '';
+    let foundAny = false;
+    
+    Object.keys(storesByNetwork).forEach(network => {
+        const filteredStores = storesByNetwork[network].filter(store => 
+            store.toLowerCase().includes(searchTerm)
+        );
+        
+        if (filteredStores.length > 0) {
+            foundAny = true;
+            html += `
+                <div class="list-item network-header">
+                    <span>${network}</span>
+                </div>
+            `;
+            
+            filteredStores.forEach(store => {
+                html += `
+                    <div class="list-item store-item">
+                        <span>${store}</span>
+                        <button onclick="removeStore('${store}')">Remover</button>
+                    </div>
+                `;
+            });
+        }
+    });
+    
+    if (!foundAny) {
+        html = '<p>Nenhuma loja encontrada.</p>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function showAllStores() {
+    document.getElementById('searchStore').value = '';
+    updateStoresList();
+}
+
 // Inicialização
 document.addEventListener('DOMContentLoaded', function() {
     updateInventoryDisplay();
