@@ -39,13 +39,23 @@ const MANAGER_PASSWORD = "gestor123";
 // Estado de autenticação do gestor
 let managerAuthenticated = false;
 
+// Estado da navegação de usuários pendentes
+let pendingViewState = {
+    level: 'states', // 'states', 'networks', 'users'
+    selectedState: null,
+    selectedNetwork: null
+};
+
 // Configurações do sistema
 let systemConfig = {
     inventoryTime: "13:00",
     dryBoxesDay: 1,
     dryBoxesTime: "13:00",
     users: ["João Silva", "Maria Santos", "Pedro Costa", "Ana Oliveira", "Carlos Ferreira"],
-    emails: ["admin@empresa.com", "gestor@empresa.com"]
+    emails: [
+        { address: "admin@empresa.com", inventory: true, dryBoxes: true },
+        { address: "gestor@empresa.com", inventory: true, dryBoxes: true }
+    ]
 };
 
 // Função para mostrar/esconder abas
@@ -89,6 +99,11 @@ function showManagerTab(tabName) {
     // Se for a aba de configurações, inicializar os dados
     if (tabName === 'config') {
         initializeConfigurationData();
+    }
+    
+    // Se for a aba de usuários pendentes, inicializar a visualização
+    if (tabName === 'pending') {
+        updatePendingView();
     }
 }
 
@@ -1240,21 +1255,27 @@ function updateStoresList() {
 // Gerenciar emails
 function addEmail() {
     const newEmail = document.getElementById('newEmail').value.trim();
-    if (newEmail && !systemConfig.emails.includes(newEmail)) {
-        systemConfig.emails.push(newEmail);
+    const emailExists = systemConfig.emails.some(email => email.address === newEmail);
+    
+    if (newEmail && !emailExists) {
+        systemConfig.emails.push({
+            address: newEmail,
+            inventory: true,
+            dryBoxes: true
+        });
         updateEmailsList();
         document.getElementById('newEmail').value = '';
         showStatus('Email adicionado com sucesso!', 'success');
-    } else if (systemConfig.emails.includes(newEmail)) {
+    } else if (emailExists) {
         showStatus('Email já existe!', 'error');
     } else {
         showStatus('Digite um email válido!', 'error');
     }
 }
 
-function removeEmail(email) {
-    if (confirm(`Tem certeza que deseja remover o email "${email}"?`)) {
-        systemConfig.emails = systemConfig.emails.filter(e => e !== email);
+function removeEmail(emailAddress) {
+    if (confirm(`Tem certeza que deseja remover o email "${emailAddress}"?`)) {
+        systemConfig.emails = systemConfig.emails.filter(e => e.address !== emailAddress);
         updateEmailsList();
         showStatus('Email removido com sucesso!', 'success');
     }
@@ -1264,16 +1285,57 @@ function updateEmailsList() {
     const container = document.getElementById('emailsList');
     let html = '';
     
-    systemConfig.emails.forEach(email => {
+    systemConfig.emails.forEach((email, index) => {
         html += `
-            <div class="list-item">
-                <span>${email}</span>
-                <button onclick="removeEmail('${email}')">Remover</button>
+            <div class="email-item">
+                <div class="email-info">
+                    <span class="email-address">${email.address}</span>
+                    <div class="email-options">
+                        <label class="email-checkbox">
+                            <input type="checkbox" ${email.inventory ? 'checked' : ''} 
+                                   onchange="updateEmailSetting(${index}, 'inventory', this.checked)">
+                            Inventário
+                        </label>
+                        <label class="email-checkbox">
+                            <input type="checkbox" ${email.dryBoxes ? 'checked' : ''} 
+                                   onchange="updateEmailSetting(${index}, 'dryBoxes', this.checked)">
+                            Caixas Secas
+                        </label>
+                        <label class="email-checkbox">
+                            <input type="checkbox" ${email.inventory && email.dryBoxes ? 'checked' : ''} 
+                                   onchange="updateEmailSetting(${index}, 'all', this.checked)">
+                            Tudo
+                        </label>
+                    </div>
+                </div>
+                <button onclick="removeEmail('${email.address}')">Remover</button>
             </div>
         `;
     });
     
     container.innerHTML = html;
+}
+
+function updateEmailSetting(index, setting, checked) {
+    if (setting === 'all') {
+        systemConfig.emails[index].inventory = checked;
+        systemConfig.emails[index].dryBoxes = checked;
+    } else {
+        systemConfig.emails[index][setting] = checked;
+    }
+    
+    // Se desmarcar inventário ou caixas secas, desmarcar "tudo" também
+    if (!checked && setting !== 'all') {
+        const email = systemConfig.emails[index];
+        if (!email.inventory || !email.dryBoxes) {
+            // Atualizar a visualização
+            updateEmailsList();
+            return;
+        }
+    }
+    
+    updateEmailsList();
+    showStatus('Configuração de email atualizada!', 'success');
 }
 
 // Funções de busca para usuários
@@ -1444,6 +1506,183 @@ function searchStores() {
 function showAllStores() {
     document.getElementById('searchStore').value = '';
     updateStoresList();
+}
+
+// Funções para usuários pendentes
+function updatePendingView() {
+    pendingViewState = { level: 'states', selectedState: null, selectedNetwork: null };
+    showPendingStates();
+}
+
+function showPendingStates() {
+    const type = document.getElementById('pendingType').value;
+    
+    // Resetar navegação
+    pendingViewState = { level: 'states', selectedState: null, selectedNetwork: null };
+    document.getElementById('backToPendingStates').style.display = 'none';
+    document.getElementById('backToPendingNetworks').style.display = 'none';
+    
+    // Mostrar apenas a view de estados
+    document.getElementById('pendingStatesView').style.display = 'block';
+    document.getElementById('pendingNetworksView').style.display = 'none';
+    document.getElementById('pendingUsersView').style.display = 'none';
+    
+    const container = document.getElementById('pendingStatesList');
+    let html = '';
+    
+    Object.keys(networksByState).forEach(state => {
+        const pendingCount = getPendingUsersCountByState(state, type);
+        if (pendingCount > 0) {
+            html += `
+                <div class="pending-item" onclick="showPendingNetworks('${state}')">
+                    <span class="pending-name">${state}</span>
+                    <span class="pending-count">${pendingCount} usuários ainda não enviaram</span>
+                    <span class="pending-arrow">→</span>
+                </div>
+            `;
+        }
+    });
+    
+    if (html === '') {
+        html = '<p>Todos os usuários já enviaram!</p>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function showPendingNetworks(stateName) {
+    const type = document.getElementById('pendingType').value;
+    
+    pendingViewState.level = 'networks';
+    pendingViewState.selectedState = stateName;
+    
+    // Atualizar navegação
+    document.getElementById('backToPendingStates').style.display = 'inline-block';
+    document.getElementById('backToPendingNetworks').style.display = 'none';
+    
+    // Mostrar apenas a view de redes
+    document.getElementById('pendingStatesView').style.display = 'none';
+    document.getElementById('pendingNetworksView').style.display = 'block';
+    document.getElementById('pendingUsersView').style.display = 'none';
+    
+    document.getElementById('pendingNetworksTitle').textContent = `Redes em ${stateName}`;
+    
+    const container = document.getElementById('pendingNetworksList');
+    let html = '';
+    
+    if (networksByState[stateName]) {
+        networksByState[stateName].forEach(network => {
+            const pendingCount = getPendingUsersCountByNetwork(stateName, network, type);
+            if (pendingCount > 0) {
+                html += `
+                    <div class="pending-item" onclick="showPendingUsers('${stateName}', '${network}')">
+                        <span class="pending-name">${network}</span>
+                        <span class="pending-count">${pendingCount} usuários ainda não enviaram</span>
+                        <span class="pending-arrow">→</span>
+                    </div>
+                `;
+            }
+        });
+    }
+    
+    if (html === '') {
+        html = '<p>Todos os usuários desta rede já enviaram!</p>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function showPendingUsers(stateName, networkName) {
+    const type = document.getElementById('pendingType').value;
+    
+    pendingViewState.level = 'users';
+    pendingViewState.selectedState = stateName;
+    pendingViewState.selectedNetwork = networkName;
+    
+    // Atualizar navegação
+    document.getElementById('backToPendingStates').style.display = 'inline-block';
+    document.getElementById('backToPendingNetworks').style.display = 'inline-block';
+    
+    // Mostrar apenas a view de usuários
+    document.getElementById('pendingStatesView').style.display = 'none';
+    document.getElementById('pendingNetworksView').style.display = 'none';
+    document.getElementById('pendingUsersView').style.display = 'block';
+    
+    document.getElementById('pendingUsersTitle').textContent = `Usuários pendentes em ${networkName} - ${stateName}`;
+    
+    const container = document.getElementById('pendingUsersList');
+    const pendingUsers = getPendingUsersByNetwork(stateName, networkName, type);
+    
+    let html = '';
+    
+    if (pendingUsers.length > 0) {
+        pendingUsers.forEach(user => {
+            html += `
+                <div class="pending-user-item">
+                    <span class="pending-user-name">${user}</span>
+                    <span class="pending-user-status">Não enviou</span>
+                </div>
+            `;
+        });
+    } else {
+        html = '<p>Todos os usuários desta rede já enviaram!</p>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function getPendingUsersCountByState(state, type) {
+    const submittedUsers = new Set();
+    const submissions = type === 'inventory' ? submissionStatus.inventory : submissionStatus.dryBoxes;
+    
+    Object.values(submissions).forEach(submission => {
+        if (submission.state === state) {
+            submittedUsers.add(submission.user);
+        }
+    });
+    
+    // Contar usuários totais que poderiam enviar neste estado
+    let totalUsersInState = 0;
+    if (networksByState[state]) {
+        networksByState[state].forEach(network => {
+            if (storesByNetwork[network]) {
+                totalUsersInState += systemConfig.users.length * storesByNetwork[network].length;
+            }
+        });
+    }
+    
+    return Math.max(0, totalUsersInState - submittedUsers.size);
+}
+
+function getPendingUsersCountByNetwork(state, network, type) {
+    const submittedUsers = new Set();
+    const submissions = type === 'inventory' ? submissionStatus.inventory : submissionStatus.dryBoxes;
+    
+    Object.values(submissions).forEach(submission => {
+        if (submission.state === state && submission.network === network) {
+            submittedUsers.add(submission.user);
+        }
+    });
+    
+    // Contar usuários totais que poderiam enviar nesta rede
+    const storesCount = storesByNetwork[network] ? storesByNetwork[network].length : 0;
+    const totalUsersInNetwork = systemConfig.users.length * storesCount;
+    
+    return Math.max(0, totalUsersInNetwork - submittedUsers.size);
+}
+
+function getPendingUsersByNetwork(state, network, type) {
+    const submittedUsers = new Set();
+    const submissions = type === 'inventory' ? submissionStatus.inventory : submissionStatus.dryBoxes;
+    
+    Object.values(submissions).forEach(submission => {
+        if (submission.state === state && submission.network === network) {
+            submittedUsers.add(submission.user);
+        }
+    });
+    
+    // Retornar usuários que ainda não enviaram
+    return systemConfig.users.filter(user => !submittedUsers.has(user));
 }
 
 // Funções para esconder listas

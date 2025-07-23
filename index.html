@@ -232,6 +232,7 @@
                 <!-- Abas de navegação para gestores -->
                 <div class="manager-tabs">
                     <button class="manager-tab-button active" onclick="showManagerTab('view')">Visualizar Dados</button>
+                    <button class="manager-tab-button" onclick="showManagerTab('pending')">Usuários Pendentes</button>
                     <button class="manager-tab-button" onclick="showManagerTab('config')">Configurações</button>
                 </div>
 
@@ -252,6 +253,43 @@
                             
                             <h4>Lista de Envios Pendentes</h4>
                             <div id="managerDryBoxesQueue"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aba de usuários pendentes -->
+                <div id="managerPendingTab" class="manager-tab-content">
+                    <h3>Usuários que Ainda Não Enviaram</h3>
+                    
+                    <div class="pending-filters">
+                        <div class="form-group">
+                            <label for="pendingType">Tipo de Envio:</label>
+                            <select id="pendingType" onchange="updatePendingView()">
+                                <option value="inventory">Inventário Diário</option>
+                                <option value="dryBoxes">Caixas Secas</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="pendingNavigation">
+                        <button id="backToPendingStates" onclick="showPendingStates()" style="display: none;">← Voltar aos Estados</button>
+                        <button id="backToPendingNetworks" onclick="showPendingNetworks()" style="display: none;">← Voltar às Redes</button>
+                    </div>
+
+                    <div id="pendingView">
+                        <div id="pendingStatesView">
+                            <h4>Estados com Usuários Pendentes</h4>
+                            <div id="pendingStatesList"></div>
+                        </div>
+                        
+                        <div id="pendingNetworksView" style="display: none;">
+                            <h4 id="pendingNetworksTitle">Redes no Estado</h4>
+                            <div id="pendingNetworksList"></div>
+                        </div>
+                        
+                        <div id="pendingUsersView" style="display: none;">
+                            <h4 id="pendingUsersTitle">Usuários Pendentes</h4>
+                            <div id="pendingUsersList"></div>
                         </div>
                     </div>
                 </div>
