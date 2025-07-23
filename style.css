@@ -13,7 +13,7 @@ body {
 }
 
 .container {
-    max-width: 800px;
+    max-width: 1000px;
     margin: 0 auto;
     background: white;
     padding: 30px;
@@ -32,6 +32,66 @@ h2 {
     color: #444;
     margin: 30px 0 15px 0;
     font-size: 1.5em;
+}
+
+h3 {
+    color: #555;
+    margin: 20px 0 10px 0;
+    font-size: 1.2em;
+}
+
+/* Estilos das abas */
+.tabs {
+    display: flex;
+    border-bottom: 2px solid #ddd;
+    margin-bottom: 30px;
+}
+
+.tab-button {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    padding: 12px 24px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+    border-radius: 8px 8px 0 0;
+    margin-right: 5px;
+}
+
+.tab-button:hover {
+    background-color: #e9ecef;
+}
+
+.tab-button.active {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Estilos do temporizador */
+.countdown-container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.countdown {
+    font-size: 2.5em;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    margin-top: 10px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
 }
 
 .form-group {
@@ -76,15 +136,47 @@ button:hover {
     background-color: #45a049;
 }
 
-#submitAll {
+#submitInventory, #submitDryBoxes {
     background-color: #2196F3;
     font-size: 18px;
     padding: 15px 30px;
     margin-top: 20px;
 }
 
-#submitAll:hover {
+#submitInventory:hover, #submitDryBoxes:hover {
     background-color: #1976D2;
+}
+
+/* Estilos dos grupos */
+.state-group {
+    background-color: #e8f5e8;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 8px;
+    border-left: 5px solid #4CAF50;
+}
+
+.state-title {
+    font-weight: bold;
+    color: #2e7d32;
+    font-size: 1.3em;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #4CAF50;
+    padding-bottom: 5px;
+}
+
+.network-group {
+    background-color: #e3f2fd;
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 5px;
+    border-left: 4px solid #2196F3;
+}
+
+.network-title {
+    font-weight: bold;
+    color: #1976D2;
+    margin-bottom: 10px;
 }
 
 .item {
@@ -118,6 +210,68 @@ button:hover {
     background-color: #d32f2f;
 }
 
+/* Estilos do status de envios */
+.submission-item {
+    background-color: #f8f9fa;
+    padding: 12px;
+    margin: 8px 0;
+    border-radius: 5px;
+    border-left: 4px solid #28a745;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.submitted {
+    color: #28a745;
+    font-weight: bold;
+    font-size: 1.2em;
+}
+
+.submission-item small {
+    color: #6c757d;
+    margin-left: auto;
+}
+
+/* Estilos da aba de gestores */
+.manager-filters {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.manager-submission {
+    background-color: #ffffff;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.submission-details {
+    font-size: 14px;
+    color: #6c757d;
+    margin-top: 8px;
+}
+
+#managerView {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+#inventoryView, #dryBoxesView {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    border: 2px solid #dee2e6;
+}
+
 #status {
     margin-top: 20px;
     padding: 15px;
@@ -138,16 +292,31 @@ button:hover {
     border: 1px solid #f5c6cb;
 }
 
-.network-group {
-    background-color: #e3f2fd;
-    padding: 15px;
-    margin: 15px 0;
-    border-radius: 5px;
-    border-left: 4px solid #2196F3;
-}
-
-.network-title {
-    font-weight: bold;
-    color: #1976D2;
-    margin-bottom: 10px;
+/* Responsividade */
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+        margin: 10px;
+    }
+    
+    .tabs {
+        flex-direction: column;
+    }
+    
+    .tab-button {
+        margin-bottom: 5px;
+        border-radius: 5px;
+    }
+    
+    .manager-filters {
+        grid-template-columns: 1fr;
+    }
+    
+    #managerView {
+        grid-template-columns: 1fr;
+    }
+    
+    .countdown {
+        font-size: 1.8em;
+    }
 }

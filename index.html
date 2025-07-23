@@ -4,71 +4,215 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Formulário de Contagem de Estoque</title>
+    <title>Sistema de Contagem de Estoque</title>
     <link href="style.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
     <div class="container">
-        <h1>Formulário de Contagem de Estoque</h1>
-        <form id="stockForm">
-            <div class="form-group">
-                <label for="user">Usuário:</label>
-                <select id="user" name="user" required>
-                    <option value="">Selecione um usuário</option>
-                    <option value="João Silva">João Silva</option>
-                    <option value="Maria Santos">Maria Santos</option>
-                    <option value="Pedro Costa">Pedro Costa</option>
-                    <option value="Ana Oliveira">Ana Oliveira</option>
-                    <option value="Carlos Ferreira">Carlos Ferreira</option>
-                </select>
+        <h1>Sistema de Contagem de Estoque</h1>
+        
+        <!-- Abas de navegação -->
+        <div class="tabs">
+            <button class="tab-button active" onclick="showTab('inventory')">Inventário Diário</button>
+            <button class="tab-button" onclick="showTab('dryBoxes')">Caixas Secas</button>
+            <button class="tab-button" onclick="showTab('manager')">Gestores</button>
+        </div>
+
+        <!-- Aba de Inventário Diário -->
+        <div id="inventoryTab" class="tab-content active">
+            <div class="countdown-container">
+                <h3>Tempo restante para envio:</h3>
+                <div id="inventoryCountdown" class="countdown"></div>
             </div>
 
-            <div class="form-group">
-                <label for="network">Rede de Lojas:</label>
-                <select id="network" name="network" required onchange="updateStores()">
-                    <option value="">Selecione uma rede</option>
-                    <option value="Rede Norte">Rede Norte</option>
-                    <option value="Rede Sul">Rede Sul</option>
-                    <option value="Rede Centro">Rede Centro</option>
-                    <option value="Rede Leste">Rede Leste</option>
-                </select>
+            <form id="stockForm">
+                <div class="form-group">
+                    <label for="user">Usuário:</label>
+                    <select id="user" name="user" required>
+                        <option value="">Selecione um usuário</option>
+                        <option value="João Silva">João Silva</option>
+                        <option value="Maria Santos">Maria Santos</option>
+                        <option value="Pedro Costa">Pedro Costa</option>
+                        <option value="Ana Oliveira">Ana Oliveira</option>
+                        <option value="Carlos Ferreira">Carlos Ferreira</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="state">Estado:</label>
+                    <select id="state" name="state" required onchange="updateNetworksByState()">
+                        <option value="">Selecione um estado</option>
+                        <option value="Rio Grande do Norte">Rio Grande do Norte</option>
+                        <option value="São Paulo">São Paulo</option>
+                        <option value="Rio de Janeiro">Rio de Janeiro</option>
+                        <option value="Minas Gerais">Minas Gerais</option>
+                        <option value="Bahia">Bahia</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="network">Rede de Lojas:</label>
+                    <select id="network" name="network" required onchange="updateStores()">
+                        <option value="">Selecione uma rede</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="store">Loja:</label>
+                    <select id="store" name="store" required>
+                        <option value="">Selecione uma loja</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="productType">Tipo do Produto:</label>
+                    <input type="text" id="productType" name="productType" required placeholder="Ex: Camiseta, Calça, Tênis">
+                </div>
+
+                <div class="form-group">
+                    <label for="boxType">Tipo de Caixa:</label>
+                    <select id="boxType" name="boxType" required>
+                        <option value="">Selecione o tipo de caixa</option>
+                        <option value="Pequena">Pequena</option>
+                        <option value="Média">Média</option>
+                        <option value="Grande">Grande</option>
+                        <option value="Extra Grande">Extra Grande</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="quantity">Quantidade de Caixas:</label>
+                    <input type="number" id="quantity" name="quantity" required min="0" placeholder="0">
+                </div>
+
+                <button type="submit">Adicionar Item</button>
+            </form>
+
+            <div id="itemsList">
+                <h2>Itens Adicionados</h2>
+                <div id="items"></div>
+                <button id="submitInventory" style="display: none;" onclick="submitToQueue('inventory')">Adicionar à Lista de Envio</button>
             </div>
 
-            <div class="form-group">
-                <label for="store">Loja:</label>
-                <select id="store" name="store" required>
-                    <option value="">Selecione uma loja</option>
-                </select>
+            <div id="submissionStatus">
+                <h3>Status dos Envios da Região</h3>
+                <div id="inventorySubmissions"></div>
+            </div>
+        </div>
+
+        <!-- Aba de Caixas Secas -->
+        <div id="dryBoxesTab" class="tab-content">
+            <div class="countdown-container">
+                <h3>Tempo restante para envio (próxima segunda-feira):</h3>
+                <div id="dryBoxesCountdown" class="countdown"></div>
             </div>
 
-            <div class="form-group">
-                <label for="productType">Tipo do Produto:</label>
-                <input type="text" id="productType" name="productType" required placeholder="Ex: Camiseta, Calça, Tênis">
+            <form id="dryBoxesForm">
+                <div class="form-group">
+                    <label for="dryUser">Usuário:</label>
+                    <select id="dryUser" name="dryUser" required>
+                        <option value="">Selecione um usuário</option>
+                        <option value="João Silva">João Silva</option>
+                        <option value="Maria Santos">Maria Santos</option>
+                        <option value="Pedro Costa">Pedro Costa</option>
+                        <option value="Ana Oliveira">Ana Oliveira</option>
+                        <option value="Carlos Ferreira">Carlos Ferreira</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dryState">Estado:</label>
+                    <select id="dryState" name="dryState" required onchange="updateDryNetworksByState()">
+                        <option value="">Selecione um estado</option>
+                        <option value="Rio Grande do Norte">Rio Grande do Norte</option>
+                        <option value="São Paulo">São Paulo</option>
+                        <option value="Rio de Janeiro">Rio de Janeiro</option>
+                        <option value="Minas Gerais">Minas Gerais</option>
+                        <option value="Bahia">Bahia</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dryNetwork">Rede de Lojas:</label>
+                    <select id="dryNetwork" name="dryNetwork" required onchange="updateDryStores()">
+                        <option value="">Selecione uma rede</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dryStore">Loja:</label>
+                    <select id="dryStore" name="dryStore" required>
+                        <option value="">Selecione uma loja</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dryBoxType">Tipo de Caixa Seca:</label>
+                    <select id="dryBoxType" name="dryBoxType" required>
+                        <option value="">Selecione o tipo de caixa</option>
+                        <option value="Caixa Seca Pequena">Caixa Seca Pequena</option>
+                        <option value="Caixa Seca Média">Caixa Seca Média</option>
+                        <option value="Caixa Seca Grande">Caixa Seca Grande</option>
+                        <option value="Caixa Seca Extra Grande">Caixa Seca Extra Grande</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dryQuantity">Quantidade de Caixas:</label>
+                    <input type="number" id="dryQuantity" name="dryQuantity" required min="0" placeholder="0">
+                </div>
+
+                <button type="submit">Adicionar Caixa Seca</button>
+            </form>
+
+            <div id="dryBoxesList">
+                <h2>Caixas Secas Adicionadas</h2>
+                <div id="dryBoxesItems"></div>
+                <button id="submitDryBoxes" style="display: none;" onclick="submitToQueue('dryBoxes')">Adicionar à Lista de Envio</button>
             </div>
 
-            <div class="form-group">
-                <label for="boxType">Tipo de Caixa:</label>
-                <select id="boxType" name="boxType" required>
-                    <option value="">Selecione o tipo de caixa</option>
-                    <option value="Pequena">Pequena</option>
-                    <option value="Média">Média</option>
-                    <option value="Grande">Grande</option>
-                    <option value="Extra Grande">Extra Grande</option>
-                </select>
+            <div id="dryBoxesSubmissionStatus">
+                <h3>Status dos Envios de Caixas Secas da Região</h3>
+                <div id="dryBoxesSubmissions"></div>
+            </div>
+        </div>
+
+        <!-- Aba de Gestores -->
+        <div id="managerTab" class="tab-content">
+            <h2>Visualização de Estoques - Gestores</h2>
+            
+            <div class="manager-filters">
+                <div class="form-group">
+                    <label for="managerState">Filtrar por Estado:</label>
+                    <select id="managerState" onchange="updateManagerView()">
+                        <option value="">Todos os estados</option>
+                        <option value="Rio Grande do Norte">Rio Grande do Norte</option>
+                        <option value="São Paulo">São Paulo</option>
+                        <option value="Rio de Janeiro">Rio de Janeiro</option>
+                        <option value="Minas Gerais">Minas Gerais</option>
+                        <option value="Bahia">Bahia</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="managerNetwork">Filtrar por Rede:</label>
+                    <select id="managerNetwork" onchange="updateManagerView()">
+                        <option value="">Todas as redes</option>
+                    </select>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="quantity">Quantidade de Caixas:</label>
-                <input type="number" id="quantity" name="quantity" required min="0" placeholder="0">
+            <div id="managerView">
+                <div id="inventoryView">
+                    <h3>Inventário Diário</h3>
+                    <div id="managerInventoryData"></div>
+                </div>
+                
+                <div id="dryBoxesView">
+                    <h3>Caixas Secas</h3>
+                    <div id="managerDryBoxesData"></div>
+                </div>
             </div>
-
-            <button type="submit">Adicionar Item</button>
-        </form>
-
-        <div id="itemsList">
-            <h2>Itens Adicionados</h2>
-            <div id="items"></div>
-            <button id="submitAll" style="display: none;" onclick="submitInventory()">Enviar Inventário</button>
         </div>
 
         <div id="status"></div>
