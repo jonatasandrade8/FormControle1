@@ -479,6 +479,312 @@ function updateManagerDryBoxesView(stateFilter, networkFilter) {
     }
     
     container.innerHTML = html;
+    
+    // Atualizar filas de envio
+    updateManagerQueueViews(stateFilter, networkFilter);
+}
+
+function updateManagerQueueViews(stateFilter, networkFilter) {
+    updateManagerInventoryQueue(stateFilter, networkFilter);
+    updateManagerDryBoxesQueue(stateFilter, networkFilter);
+}
+
+function updateManagerInventoryQueue(stateFilter, networkFilter) {
+    const container = document.getElementById('managerInventoryQueue');
+    let html = '';
+    
+    inventorySubmissionQueue.forEach((submission, index) => {
+        if ((!stateFilter || submission.state === stateFilter) &&
+            (!networkFilter || submission.network === networkFilter)) {
+            html += `<div class="queue-item">
+                <div class="queue-header">
+                    <div class="queue-user-info">
+                        <strong>${submission.user}</strong> - ${submission.store}
+                        <br><small>Estado: ${submission.state} | Rede: ${submission.network}</small>
+                        <br><small>Adicionado em: ${submission.timestamp.toLocaleString()}</small>
+                    </div>
+                    <div class="queue-actions">
+                        <button class="edit-btn" onclick="editQueueSubmission('inventory', ${index})">Editar</button>
+                        <button class="delete-btn" onclick="deleteQueueSubmission('inventory', ${index})">Excluir</button>
+                    </div>
+                </div>
+                <div class="queue-items-list">
+                    <strong>Itens (${submission.items.length}):</strong>
+                    ${submission.items.map(item => 
+                        `<div class="queue-item-detail">
+                            ${item.productType} - ${item.boxType} (${item.quantity} unidades)
+                        </div>`
+                    ).join('')}
+                </div>
+            </div>`;
+        }
+    });
+    
+    if (html === '') {
+        html = '<p>Nenhum envio pendente de inventário.</p>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function updateManagerDryBoxesQueue(stateFilter, networkFilter) {
+    const container = document.getElementById('managerDryBoxesQueue');
+    let html = '';
+    
+    dryBoxesSubmissionQueue.forEach((submission, index) => {
+        if ((!stateFilter || submission.state === stateFilter) &&
+            (!networkFilter || submission.network === networkFilter)) {
+            html += `<div class="queue-item">
+                <div class="queue-header">
+                    <div class="queue-user-info">
+                        <strong>${submission.user}</strong> - ${submission.store}
+                        <br><small>Estado: ${submission.state} | Rede: ${submission.network}</small>
+                        <br><small>Adicionado em: ${submission.timestamp.toLocaleString()}</small>
+                    </div>
+                    <div class="queue-actions">
+                        <button class="edit-btn" onclick="editQueueSubmission('dryBoxes', ${index})">Editar</button>
+                        <button class="delete-btn" onclick="deleteQueueSubmission('dryBoxes', ${index})">Excluir</button>
+                    </div>
+                </div>
+                <div class="queue-items-list">
+                    <strong>Itens (${submission.items.length}):</strong>
+                    ${submission.items.map(item => 
+                        `<div class="queue-item-detail">
+                            ${item.boxType} (${item.quantity} unidades)
+                        </div>`
+                    ).join('')}
+                </div>
+            </div>`;
+        }
+    });
+    
+    if (html === '') {
+        html = '<p>Nenhum envio pendente de caixas secas.</p>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function deleteQueueSubmission(type, index) {
+    if (confirm('Tem certeza que deseja excluir este envio?')) {
+        if (type === 'inventory') {
+            inventorySubmissionQueue.splice(index, 1);
+        } else {
+            dryBoxesSubmissionQueue.splice(index, 1);
+        }
+        updateManagerView();
+        showStatus('Envio excluído com sucesso!', 'success');
+    }
+}
+
+let currentEditingSubmission = null;
+
+function editQueueSubmission(type, index) {
+    currentEditingSubmission = { type, index };
+    const submission = type === 'inventory' ? inventorySubmissionQueue[index] : dryBoxesSubmissionQueue[index];
+    
+    showEditModal(submission, type);
+}
+
+function showEditModal(submission, type) {
+    const modal = document.getElementById('editModal') || createEditModal();
+    const modalContent = modal.querySelector('.modal-content');
+    
+    const title = type === 'inventory' ? 'Inventário Diário' : 'Caixas Secas';
+    
+    modalContent.innerHTML = `
+        <div class="modal-header">
+            <h3>Editar Envio - ${title}</h3>
+            <button class="close-modal" onclick="closeEditModal()">Fechar</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Usuário: <strong>${submission.user}</strong></label>
+            </div>
+            <div class="form-group">
+                <label>Estado: <strong>${submission.state}</strong></label>
+            </div>
+            <div class="form-group">
+                <label>Rede: <strong>${submission.network}</strong></label>
+            </div>
+            <div class="form-group">
+                <label>Loja: <strong>${submission.store}</strong></label>
+            </div>
+            <div id="editableItems">
+                <h4>Itens:</h4>
+                ${generateEditableItems(submission.items, type)}
+            </div>
+            <button onclick="addNewEditableItem('${type}')">Adicionar Item</button>
+        </div>
+        <div class="modal-footer" style="text-align: right; margin-top: 20px;">
+            <button onclick="closeEditModal()" style="background-color: #6c757d;">Cancelar</button>
+            <button onclick="saveEditedSubmission()" style="background-color: #28a745;">Salvar Alterações</button>
+        </div>
+    `;
+    
+    modal.style.display = 'block';
+}
+
+function generateEditableItems(items, type) {
+    return items.map((item, index) => {
+        if (type === 'inventory') {
+            return `<div class="editable-item" data-index="${index}">
+                <button class="item-remove-btn" onclick="removeEditableItem(${index})">Remover</button>
+                <div class="form-group">
+                    <label>Tipo do Produto:</label>
+                    <input type="text" name="productType" value="${item.productType}" required>
+                </div>
+                <div class="form-group">
+                    <label>Tipo de Caixa:</label>
+                    <select name="boxType" required>
+                        <option value="Pequena" ${item.boxType === 'Pequena' ? 'selected' : ''}>Pequena</option>
+                        <option value="Média" ${item.boxType === 'Média' ? 'selected' : ''}>Média</option>
+                        <option value="Grande" ${item.boxType === 'Grande' ? 'selected' : ''}>Grande</option>
+                        <option value="Extra Grande" ${item.boxType === 'Extra Grande' ? 'selected' : ''}>Extra Grande</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Quantidade:</label>
+                    <input type="number" name="quantity" value="${item.quantity}" min="0" required>
+                </div>
+            </div>`;
+        } else {
+            return `<div class="editable-item" data-index="${index}">
+                <button class="item-remove-btn" onclick="removeEditableItem(${index})">Remover</button>
+                <div class="form-group">
+                    <label>Tipo de Caixa Seca:</label>
+                    <select name="boxType" required>
+                        <option value="Caixa Seca Pequena" ${item.boxType === 'Caixa Seca Pequena' ? 'selected' : ''}>Caixa Seca Pequena</option>
+                        <option value="Caixa Seca Média" ${item.boxType === 'Caixa Seca Média' ? 'selected' : ''}>Caixa Seca Média</option>
+                        <option value="Caixa Seca Grande" ${item.boxType === 'Caixa Seca Grande' ? 'selected' : ''}>Caixa Seca Grande</option>
+                        <option value="Caixa Seca Extra Grande" ${item.boxType === 'Caixa Seca Extra Grande' ? 'selected' : ''}>Caixa Seca Extra Grande</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Quantidade:</label>
+                    <input type="number" name="quantity" value="${item.quantity}" min="0" required>
+                </div>
+            </div>`;
+        }
+    }).join('');
+}
+
+function addNewEditableItem(type) {
+    const container = document.getElementById('editableItems');
+    const itemsCount = container.querySelectorAll('.editable-item').length;
+    
+    let newItemHtml = '';
+    if (type === 'inventory') {
+        newItemHtml = `<div class="editable-item" data-index="${itemsCount}">
+            <button class="item-remove-btn" onclick="removeEditableItem(${itemsCount})">Remover</button>
+            <div class="form-group">
+                <label>Tipo do Produto:</label>
+                <input type="text" name="productType" required>
+            </div>
+            <div class="form-group">
+                <label>Tipo de Caixa:</label>
+                <select name="boxType" required>
+                    <option value="">Selecione o tipo de caixa</option>
+                    <option value="Pequena">Pequena</option>
+                    <option value="Média">Média</option>
+                    <option value="Grande">Grande</option>
+                    <option value="Extra Grande">Extra Grande</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Quantidade:</label>
+                <input type="number" name="quantity" min="0" required>
+            </div>
+        </div>`;
+    } else {
+        newItemHtml = `<div class="editable-item" data-index="${itemsCount}">
+            <button class="item-remove-btn" onclick="removeEditableItem(${itemsCount})">Remover</button>
+            <div class="form-group">
+                <label>Tipo de Caixa Seca:</label>
+                <select name="boxType" required>
+                    <option value="">Selecione o tipo de caixa</option>
+                    <option value="Caixa Seca Pequena">Caixa Seca Pequena</option>
+                    <option value="Caixa Seca Média">Caixa Seca Média</option>
+                    <option value="Caixa Seca Grande">Caixa Seca Grande</option>
+                    <option value="Caixa Seca Extra Grande">Caixa Seca Extra Grande</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Quantidade:</label>
+                <input type="number" name="quantity" min="0" required>
+            </div>
+        </div>`;
+    }
+    
+    container.insertAdjacentHTML('beforeend', newItemHtml);
+}
+
+function removeEditableItem(index) {
+    const item = document.querySelector(`[data-index="${index}"]`);
+    if (item) {
+        item.remove();
+    }
+}
+
+function saveEditedSubmission() {
+    if (!currentEditingSubmission) return;
+    
+    const { type, index } = currentEditingSubmission;
+    const editableItems = document.querySelectorAll('.editable-item');
+    
+    const updatedItems = [];
+    editableItems.forEach(itemDiv => {
+        const inputs = itemDiv.querySelectorAll('input, select');
+        const item = {};
+        
+        inputs.forEach(input => {
+            if (input.name === 'quantity') {
+                item[input.name] = parseInt(input.value);
+            } else {
+                item[input.name] = input.value;
+            }
+        });
+        
+        updatedItems.push(item);
+    });
+    
+    if (updatedItems.length === 0) {
+        alert('Pelo menos um item deve ser mantido.');
+        return;
+    }
+    
+    // Atualizar a submission
+    const queue = type === 'inventory' ? inventorySubmissionQueue : dryBoxesSubmissionQueue;
+    queue[index].items = updatedItems;
+    
+    closeEditModal();
+    updateManagerView();
+    showStatus('Envio atualizado com sucesso!', 'success');
+}
+
+function createEditModal() {
+    const modal = document.createElement('div');
+    modal.id = 'editModal';
+    modal.className = 'modal';
+    modal.innerHTML = '<div class="modal-content"></div>';
+    
+    // Fechar modal clicando fora
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeEditModal();
+        }
+    });
+    
+    document.body.appendChild(modal);
+    return modal;
+}
+
+function closeEditModal() {
+    const modal = document.getElementById('editModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    currentEditingSubmission = null;
 }
 
 // Funções de contagem regressiva
