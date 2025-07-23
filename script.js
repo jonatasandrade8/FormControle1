@@ -1446,6 +1446,27 @@ function showAllStores() {
     updateStoresList();
 }
 
+// Funções para esconder listas
+function hideAllUsers() {
+    document.getElementById('searchUser').value = '';
+    document.getElementById('usersList').innerHTML = '<p>Lista ocultada. Clique em "Exibir Todos" para visualizar.</p>';
+}
+
+function hideAllStates() {
+    document.getElementById('searchState').value = '';
+    document.getElementById('statesList').innerHTML = '<p>Lista ocultada. Clique em "Exibir Todos" para visualizar.</p>';
+}
+
+function hideAllNetworks() {
+    document.getElementById('searchNetwork').value = '';
+    document.getElementById('networksList').innerHTML = '<p>Lista ocultada. Clique em "Exibir Todos" para visualizar.</p>';
+}
+
+function hideAllStores() {
+    document.getElementById('searchStore').value = '';
+    document.getElementById('storesList').innerHTML = '<p>Lista ocultada. Clique em "Exibir Todos" para visualizar.</p>';
+}
+
 // Inicialização
 document.addEventListener('DOMContentLoaded', function() {
     updateInventoryDisplay();
