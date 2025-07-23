@@ -39,6 +39,15 @@ const MANAGER_PASSWORD = "gestor123";
 // Estado de autenticação do gestor
 let managerAuthenticated = false;
 
+// Configurações do sistema
+let systemConfig = {
+    inventoryTime: "13:00",
+    dryBoxesDay: 1,
+    dryBoxesTime: "13:00",
+    users: ["João Silva", "Maria Santos", "Pedro Costa", "Ana Oliveira", "Carlos Ferreira"],
+    emails: ["admin@empresa.com", "gestor@empresa.com"]
+};
+
 // Função para mostrar/esconder abas
 function showTab(tabName) {
     // Esconder todas as abas
@@ -58,6 +67,28 @@ function showTab(tabName) {
     // Verificar autenticação se for a aba de gestor
     if (tabName === 'manager') {
         checkManagerAuthentication();
+    }
+}
+
+// Função para mostrar/esconder abas de gestores
+function showManagerTab(tabName) {
+    // Esconder todas as abas de gestores
+    document.querySelectorAll('.manager-tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Remover classe active de todos os botões de gestores
+    document.querySelectorAll('.manager-tab-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Mostrar aba selecionada
+    document.getElementById('manager' + tabName.charAt(0).toUpperCase() + tabName.slice(1) + 'Tab').classList.add('active');
+    event.target.classList.add('active');
+    
+    // Se for a aba de configurações, inicializar os dados
+    if (tabName === 'config') {
+        initializeConfigurationData();
     }
 }
 
@@ -796,64 +827,77 @@ function updateCountdowns() {
 function updateInventoryCountdown() {
     const now = new Date();
     const target = new Date();
-    target.setHours(13, 0, 0, 0);
+    const [hours, minutes] = systemConfig.inventoryTime.split(':').map(Number);
+    target.setHours(hours, minutes, 0, 0);
     
     if (now > target) {
         target.setDate(target.getDate() + 1);
     }
     
     const timeDiff = target - now;
-    const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-    const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+    const remainingHours = Math.floor(timeDiff / (1000 * 60 * 60));
+    const remainingMinutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+    const remainingSeconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
     
     const countdownElement = document.getElementById('inventoryCountdown');
-    countdownElement.innerHTML = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    countdownElement.innerHTML = `${remainingHours.toString().padStart(2, '0')}:${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
 function updateDryBoxesCountdown() {
     const now = new Date();
     const target = new Date();
     
-    // Encontrar próxima segunda-feira às 13:00
+    // Encontrar próximo dia configurado
     const dayOfWeek = now.getDay();
-    const daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+    const targetDay = systemConfig.dryBoxesDay;
+    const [hours, minutes] = systemConfig.dryBoxesTime.split(':').map(Number);
     
-    target.setDate(now.getDate() + daysUntilMonday);
-    target.setHours(13, 0, 0, 0);
+    let daysUntilTarget;
+    if (targetDay === 0) { // Domingo
+        daysUntilTarget = dayOfWeek === 0 ? 0 : (7 - dayOfWeek);
+    } else {
+        daysUntilTarget = dayOfWeek <= targetDay ? (targetDay - dayOfWeek) : (7 - dayOfWeek + targetDay);
+    }
     
-    // Se hoje é segunda e ainda não passou das 13:00
-    if (dayOfWeek === 1 && now.getHours() < 13) {
-        target.setDate(now.getDate());
+    target.setDate(now.getDate() + daysUntilTarget);
+    target.setHours(hours, minutes, 0, 0);
+    
+    // Se é hoje e ainda não passou do horário
+    if (daysUntilTarget === 0 && now.getTime() > target.getTime()) {
+        target.setDate(target.getDate() + 7);
     }
     
     const timeDiff = target - now;
     const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+    const remainingHours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const remainingMinutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+    const remainingSeconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
     
     const countdownElement = document.getElementById('dryBoxesCountdown');
-    countdownElement.innerHTML = `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    countdownElement.innerHTML = `${days}d ${remainingHours.toString().padStart(2, '0')}:${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
 // Função para envio automático
 function processAutomaticSubmissions() {
     const now = new Date();
+    const [inventoryHours, inventoryMinutes] = systemConfig.inventoryTime.split(':').map(Number);
+    const [dryBoxesHours, dryBoxesMinutes] = systemConfig.dryBoxesTime.split(':').map(Number);
     
-    // Verificar envio de inventário (13:00 todos os dias)
-    if (now.getHours() === 13 && now.getMinutes() === 0) {
+    // Verificar envio de inventário (horário configurado todos os dias)
+    if (now.getHours() === inventoryHours && now.getMinutes() === inventoryMinutes) {
         if (inventorySubmissionQueue.length > 0) {
-            console.log('Enviando inventários automaticamente:', inventorySubmissionQueue);
+            console.log('Enviando inventários automaticamente para:', systemConfig.emails);
+            console.log('Dados do inventário:', inventorySubmissionQueue);
             inventorySubmissionQueue = [];
             showStatus('Inventários enviados automaticamente!', 'success');
         }
     }
     
-    // Verificar envio de caixas secas (segunda-feira às 13:00)
-    if (now.getDay() === 1 && now.getHours() === 13 && now.getMinutes() === 0) {
+    // Verificar envio de caixas secas (dia e horário configurados)
+    if (now.getDay() === systemConfig.dryBoxesDay && now.getHours() === dryBoxesHours && now.getMinutes() === dryBoxesMinutes) {
         if (dryBoxesSubmissionQueue.length > 0) {
-            console.log('Enviando caixas secas automaticamente:', dryBoxesSubmissionQueue);
+            console.log('Enviando caixas secas automaticamente para:', systemConfig.emails);
+            console.log('Dados das caixas secas:', dryBoxesSubmissionQueue);
             dryBoxesSubmissionQueue = [];
             showStatus('Caixas secas enviadas automaticamente!', 'success');
         }
@@ -921,6 +965,316 @@ document.getElementById('managerLoginForm').addEventListener('submit', function(
 document.getElementById('logoutManager').addEventListener('click', function() {
     logoutManager();
 });
+
+// Funções de configuração
+function initializeConfigurationData() {
+    // Inicializar horários
+    document.getElementById('inventoryTime').value = systemConfig.inventoryTime;
+    document.getElementById('dryBoxesDay').value = systemConfig.dryBoxesDay;
+    document.getElementById('dryBoxesTime').value = systemConfig.dryBoxesTime;
+    
+    // Atualizar listas
+    updateUsersList();
+    updateStatesList();
+    updateNetworksList();
+    updateStoresList();
+    updateEmailsList();
+    updateConfigSelects();
+}
+
+function updateConfigSelects() {
+    // Atualizar select de estados para redes
+    const networkStateSelect = document.getElementById('networkState');
+    networkStateSelect.innerHTML = '<option value="">Selecione um estado</option>';
+    Object.keys(networksByState).forEach(state => {
+        const option = document.createElement('option');
+        option.value = state;
+        option.textContent = state;
+        networkStateSelect.appendChild(option);
+    });
+    
+    // Atualizar select de redes para lojas
+    const storeNetworkSelect = document.getElementById('storeNetwork');
+    storeNetworkSelect.innerHTML = '<option value="">Selecione uma rede</option>';
+    Object.keys(storesByNetwork).forEach(network => {
+        const option = document.createElement('option');
+        option.value = network;
+        option.textContent = network;
+        storeNetworkSelect.appendChild(option);
+    });
+}
+
+function saveScheduleSettings() {
+    systemConfig.inventoryTime = document.getElementById('inventoryTime').value;
+    systemConfig.dryBoxesDay = parseInt(document.getElementById('dryBoxesDay').value);
+    systemConfig.dryBoxesTime = document.getElementById('dryBoxesTime').value;
+    
+    showStatus('Configurações de horário salvas com sucesso!', 'success');
+}
+
+// Gerenciar usuários
+function addUser() {
+    const newUser = document.getElementById('newUser').value.trim();
+    if (newUser && !systemConfig.users.includes(newUser)) {
+        systemConfig.users.push(newUser);
+        updateUsersList();
+        updateUserSelects();
+        document.getElementById('newUser').value = '';
+        showStatus('Usuário adicionado com sucesso!', 'success');
+    } else if (systemConfig.users.includes(newUser)) {
+        showStatus('Usuário já existe!', 'error');
+    } else {
+        showStatus('Digite um nome válido!', 'error');
+    }
+}
+
+function removeUser(username) {
+    if (confirm(`Tem certeza que deseja remover o usuário "${username}"?`)) {
+        systemConfig.users = systemConfig.users.filter(user => user !== username);
+        updateUsersList();
+        updateUserSelects();
+        showStatus('Usuário removido com sucesso!', 'success');
+    }
+}
+
+function updateUsersList() {
+    const container = document.getElementById('usersList');
+    let html = '';
+    
+    systemConfig.users.forEach(user => {
+        html += `
+            <div class="list-item">
+                <span>${user}</span>
+                <button onclick="removeUser('${user}')">Remover</button>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+function updateUserSelects() {
+    // Atualizar todos os selects de usuários
+    const userSelects = ['user', 'dryUser'];
+    userSelects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        const currentValue = select.value;
+        select.innerHTML = '<option value="">Selecione um usuário</option>';
+        
+        systemConfig.users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user;
+            option.textContent = user;
+            if (user === currentValue) option.selected = true;
+            select.appendChild(option);
+        });
+    });
+}
+
+// Gerenciar estados
+function addState() {
+    const newState = document.getElementById('newState').value.trim();
+    if (newState && !networksByState[newState]) {
+        networksByState[newState] = [];
+        updateStatesList();
+        updateConfigSelects();
+        document.getElementById('newState').value = '';
+        showStatus('Estado adicionado com sucesso!', 'success');
+    } else if (networksByState[newState]) {
+        showStatus('Estado já existe!', 'error');
+    } else {
+        showStatus('Digite um nome válido!', 'error');
+    }
+}
+
+function removeState(stateName) {
+    if (confirm(`Tem certeza que deseja remover o estado "${stateName}" e todas suas redes?`)) {
+        delete networksByState[stateName];
+        updateStatesList();
+        updateConfigSelects();
+        showStatus('Estado removido com sucesso!', 'success');
+    }
+}
+
+function updateStatesList() {
+    const container = document.getElementById('statesList');
+    let html = '';
+    
+    Object.keys(networksByState).forEach(state => {
+        html += `
+            <div class="list-item state-header">
+                <span>${state}</span>
+                <button onclick="removeState('${state}')">Remover</button>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Gerenciar redes
+function addNetwork() {
+    const selectedState = document.getElementById('networkState').value;
+    const newNetwork = document.getElementById('newNetwork').value.trim();
+    
+    if (!selectedState) {
+        showStatus('Selecione um estado primeiro!', 'error');
+        return;
+    }
+    
+    if (newNetwork && !networksByState[selectedState].includes(newNetwork)) {
+        networksByState[selectedState].push(newNetwork);
+        storesByNetwork[newNetwork] = [];
+        updateNetworksList();
+        updateConfigSelects();
+        document.getElementById('newNetwork').value = '';
+        showStatus('Rede adicionada com sucesso!', 'success');
+    } else if (networksByState[selectedState].includes(newNetwork)) {
+        showStatus('Rede já existe neste estado!', 'error');
+    } else {
+        showStatus('Digite um nome válido!', 'error');
+    }
+}
+
+function removeNetwork(networkName) {
+    if (confirm(`Tem certeza que deseja remover a rede "${networkName}" e todas suas lojas?`)) {
+        // Remover das redes por estado
+        Object.keys(networksByState).forEach(state => {
+            networksByState[state] = networksByState[state].filter(network => network !== networkName);
+        });
+        
+        // Remover das lojas por rede
+        delete storesByNetwork[networkName];
+        
+        updateNetworksList();
+        updateConfigSelects();
+        showStatus('Rede removida com sucesso!', 'success');
+    }
+}
+
+function updateNetworksList() {
+    const container = document.getElementById('networksList');
+    let html = '';
+    
+    Object.keys(networksByState).forEach(state => {
+        if (networksByState[state].length > 0) {
+            html += `
+                <div class="list-item state-header">
+                    <span>${state}</span>
+                </div>
+            `;
+            
+            networksByState[state].forEach(network => {
+                html += `
+                    <div class="list-item network-item">
+                        <span>${network}</span>
+                        <button onclick="removeNetwork('${network}')">Remover</button>
+                    </div>
+                `;
+            });
+        }
+    });
+    
+    container.innerHTML = html;
+}
+
+// Gerenciar lojas
+function addStore() {
+    const selectedNetwork = document.getElementById('storeNetwork').value;
+    const newStore = document.getElementById('newStore').value.trim();
+    
+    if (!selectedNetwork) {
+        showStatus('Selecione uma rede primeiro!', 'error');
+        return;
+    }
+    
+    if (newStore && !storesByNetwork[selectedNetwork].includes(newStore)) {
+        storesByNetwork[selectedNetwork].push(newStore);
+        updateStoresList();
+        document.getElementById('newStore').value = '';
+        showStatus('Loja adicionada com sucesso!', 'success');
+    } else if (storesByNetwork[selectedNetwork].includes(newStore)) {
+        showStatus('Loja já existe nesta rede!', 'error');
+    } else {
+        showStatus('Digite um nome válido!', 'error');
+    }
+}
+
+function removeStore(storeName) {
+    if (confirm(`Tem certeza que deseja remover a loja "${storeName}"?`)) {
+        Object.keys(storesByNetwork).forEach(network => {
+            storesByNetwork[network] = storesByNetwork[network].filter(store => store !== storeName);
+        });
+        
+        updateStoresList();
+        showStatus('Loja removida com sucesso!', 'success');
+    }
+}
+
+function updateStoresList() {
+    const container = document.getElementById('storesList');
+    let html = '';
+    
+    Object.keys(storesByNetwork).forEach(network => {
+        if (storesByNetwork[network].length > 0) {
+            html += `
+                <div class="list-item network-header">
+                    <span>${network}</span>
+                </div>
+            `;
+            
+            storesByNetwork[network].forEach(store => {
+                html += `
+                    <div class="list-item store-item">
+                        <span>${store}</span>
+                        <button onclick="removeStore('${store}')">Remover</button>
+                    </div>
+                `;
+            });
+        }
+    });
+    
+    container.innerHTML = html;
+}
+
+// Gerenciar emails
+function addEmail() {
+    const newEmail = document.getElementById('newEmail').value.trim();
+    if (newEmail && !systemConfig.emails.includes(newEmail)) {
+        systemConfig.emails.push(newEmail);
+        updateEmailsList();
+        document.getElementById('newEmail').value = '';
+        showStatus('Email adicionado com sucesso!', 'success');
+    } else if (systemConfig.emails.includes(newEmail)) {
+        showStatus('Email já existe!', 'error');
+    } else {
+        showStatus('Digite um email válido!', 'error');
+    }
+}
+
+function removeEmail(email) {
+    if (confirm(`Tem certeza que deseja remover o email "${email}"?`)) {
+        systemConfig.emails = systemConfig.emails.filter(e => e !== email);
+        updateEmailsList();
+        showStatus('Email removido com sucesso!', 'success');
+    }
+}
+
+function updateEmailsList() {
+    const container = document.getElementById('emailsList');
+    let html = '';
+    
+    systemConfig.emails.forEach(email => {
+        html += `
+            <div class="list-item">
+                <span>${email}</span>
+                <button onclick="removeEmail('${email}')">Remover</button>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', function() {

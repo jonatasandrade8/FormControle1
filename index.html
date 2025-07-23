@@ -226,21 +226,155 @@
                     </div>
                 </div>
 
-                <div id="managerView">
-                    <div id="inventoryView">
-                        <h3>Inventário Diário</h3>
-                        <div id="managerInventoryData"></div>
+                <!-- Abas de navegação para gestores -->
+                <div class="manager-tabs">
+                    <button class="manager-tab-button active" onclick="showManagerTab('view')">Visualizar Dados</button>
+                    <button class="manager-tab-button" onclick="showManagerTab('config')">Configurações</button>
+                </div>
+
+                <!-- Aba de visualização de dados -->
+                <div id="managerViewTab" class="manager-tab-content active">
+                    <div id="managerView">
+                        <div id="inventoryView">
+                            <h3>Inventário Diário</h3>
+                            <div id="managerInventoryData"></div>
+                            
+                            <h4>Lista de Envios Pendentes</h4>
+                            <div id="managerInventoryQueue"></div>
+                        </div>
                         
-                        <h4>Lista de Envios Pendentes</h4>
-                        <div id="managerInventoryQueue"></div>
+                        <div id="dryBoxesView">
+                            <h3>Caixas Secas</h3>
+                            <div id="managerDryBoxesData"></div>
+                            
+                            <h4>Lista de Envios Pendentes</h4>
+                            <div id="managerDryBoxesQueue"></div>
+                        </div>
                     </div>
+                </div>
+
+                <!-- Aba de configurações -->
+                <div id="managerConfigTab" class="manager-tab-content">
+                    <h3>Configurações do Sistema</h3>
                     
-                    <div id="dryBoxesView">
-                        <h3>Caixas Secas</h3>
-                        <div id="managerDryBoxesData"></div>
-                        
-                        <h4>Lista de Envios Pendentes</h4>
-                        <div id="managerDryBoxesQueue"></div>
+                    <!-- Configuração de horários -->
+                    <div class="config-section">
+                        <h4>Horários de Envio Automático</h4>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="inventoryTime">Horário do Inventário Diário:</label>
+                                <input type="time" id="inventoryTime" value="13:00">
+                            </div>
+                            <div class="form-group">
+                                <label for="dryBoxesDay">Dia da Semana - Caixas Secas:</label>
+                                <select id="dryBoxesDay">
+                                    <option value="1" selected>Segunda-feira</option>
+                                    <option value="2">Terça-feira</option>
+                                    <option value="3">Quarta-feira</option>
+                                    <option value="4">Quinta-feira</option>
+                                    <option value="5">Sexta-feira</option>
+                                    <option value="6">Sábado</option>
+                                    <option value="0">Domingo</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="dryBoxesTime">Horário das Caixas Secas:</label>
+                                <input type="time" id="dryBoxesTime" value="13:00">
+                            </div>
+                        </div>
+                        <button onclick="saveScheduleSettings()">Salvar Horários</button>
+                    </div>
+
+                    <!-- Configuração de usuários -->
+                    <div class="config-section">
+                        <h4>Gerenciar Usuários</h4>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="newUser">Novo Usuário:</label>
+                                <input type="text" id="newUser" placeholder="Nome do usuário">
+                                <button onclick="addUser()">Adicionar</button>
+                            </div>
+                        </div>
+                        <div class="list-container">
+                            <h5>Usuários Cadastrados:</h5>
+                            <div id="usersList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Configuração de estados -->
+                    <div class="config-section">
+                        <h4>Gerenciar Estados</h4>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="newState">Novo Estado:</label>
+                                <input type="text" id="newState" placeholder="Nome do estado">
+                                <button onclick="addState()">Adicionar</button>
+                            </div>
+                        </div>
+                        <div class="list-container">
+                            <h5>Estados Cadastrados:</h5>
+                            <div id="statesList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Configuração de redes -->
+                    <div class="config-section">
+                        <h4>Gerenciar Redes de Lojas</h4>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="networkState">Estado:</label>
+                                <select id="networkState">
+                                    <option value="">Selecione um estado</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="newNetwork">Nova Rede:</label>
+                                <input type="text" id="newNetwork" placeholder="Nome da rede">
+                                <button onclick="addNetwork()">Adicionar</button>
+                            </div>
+                        </div>
+                        <div class="list-container">
+                            <h5>Redes por Estado:</h5>
+                            <div id="networksList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Configuração de lojas -->
+                    <div class="config-section">
+                        <h4>Gerenciar Lojas</h4>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="storeNetwork">Rede:</label>
+                                <select id="storeNetwork">
+                                    <option value="">Selecione uma rede</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="newStore">Nova Loja:</label>
+                                <input type="text" id="newStore" placeholder="Nome da loja">
+                                <button onclick="addStore()">Adicionar</button>
+                            </div>
+                        </div>
+                        <div class="list-container">
+                            <h5>Lojas por Rede:</h5>
+                            <div id="storesList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Configuração de emails -->
+                    <div class="config-section">
+                        <h4>Gerenciar Emails de Envio</h4>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="newEmail">Novo Email:</label>
+                                <input type="email" id="newEmail" placeholder="email@exemplo.com">
+                                <button onclick="addEmail()">Adicionar</button>
+                            </div>
+                        </div>
+                        <div class="list-container">
+                            <h5>Emails Cadastrados:</h5>
+                            <div id="emailsList"></div>
+                        </div>
                     </div>
                 </div>
             </div>

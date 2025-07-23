@@ -500,6 +500,145 @@ button:hover {
     border: 1px solid #f5c6cb;
 }
 
+/* Estilos das abas de gestores */
+.manager-tabs {
+    display: flex;
+    border-bottom: 2px solid #ddd;
+    margin-bottom: 20px;
+}
+
+.manager-tab-button {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+    border-radius: 5px 5px 0 0;
+    margin-right: 3px;
+}
+
+.manager-tab-button:hover {
+    background-color: #e9ecef;
+}
+
+.manager-tab-button.active {
+    background-color: #007bff;
+    color: white;
+}
+
+.manager-tab-content {
+    display: none;
+}
+
+.manager-tab-content.active {
+    display: block;
+}
+
+/* Estilos das configurações */
+.config-section {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 25px;
+}
+
+.config-section h4 {
+    color: #495057;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 5px;
+}
+
+.config-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.config-row .form-group {
+    margin-bottom: 0;
+}
+
+.config-row input, .config-row select {
+    margin-bottom: 10px;
+}
+
+.config-row button {
+    padding: 8px 16px;
+    font-size: 14px;
+    margin: 0;
+    align-self: end;
+    height: fit-content;
+}
+
+.list-container {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 15px;
+    margin-top: 15px;
+}
+
+.list-container h5 {
+    color: #6c757d;
+    margin-bottom: 10px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.list-item {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 10px 15px;
+    margin: 5px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.list-item span {
+    font-weight: 500;
+    color: #495057;
+}
+
+.list-item button {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.list-item button:hover {
+    background-color: #c82333;
+}
+
+.network-item, .store-item {
+    margin-left: 20px;
+    border-left: 3px solid #007bff;
+}
+
+.state-header {
+    background-color: #e7f3ff;
+    font-weight: bold;
+    color: #0056b3;
+}
+
+.network-header {
+    background-color: #fff3cd;
+    font-weight: bold;
+    color: #856404;
+    margin-left: 10px;
+}
+
 /* Responsividade */
 @media (max-width: 768px) {
     .container {
@@ -526,5 +665,18 @@ button:hover {
     
     .countdown {
         font-size: 1.8em;
+    }
+    
+    .config-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .manager-tabs {
+        flex-direction: column;
+    }
+    
+    .manager-tab-button {
+        margin-bottom: 3px;
+        border-radius: 5px;
     }
 }
