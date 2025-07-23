@@ -973,11 +973,11 @@ function initializeConfigurationData() {
     document.getElementById('dryBoxesDay').value = systemConfig.dryBoxesDay;
     document.getElementById('dryBoxesTime').value = systemConfig.dryBoxesTime;
     
-    // Atualizar listas
-    updateUsersList();
-    updateStatesList();
-    updateNetworksList();
-    updateStoresList();
+    // Iniciar com listas escondidas
+    hideAllUsers();
+    hideAllStates();
+    hideAllNetworks();
+    hideAllStores();
     updateEmailsList();
     updateConfigSelects();
 }
