@@ -1,4 +1,3 @@
-
 * {
     margin: 0;
     padding: 0;
@@ -319,15 +318,7 @@ button:hover {
     background-color: #c82333;
 }
 
-.manager-filters {
-    background-color: #f8f9fa;
-    padding: 20px;
-    border-radius: 8px;
-    margin-bottom: 30px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-}
+
 
 .manager-submission {
     background-color: #ffffff;
@@ -387,22 +378,40 @@ button:hover {
 }
 
 .edit-btn {
-    background-color: #ffc107;
-    color: #212529;
-    padding: 6px 12px;
-    font-size: 12px;
-    border-radius: 4px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-right: 5px;
 }
 
 .edit-btn:hover {
-    background-color: #e0a800;
+    background-color: #0056b3;
+}
+
+.send-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-right: 5px;
+}
+
+.send-btn:hover {
+    background-color: #218838;
 }
 
 .delete-btn {
     background-color: #dc3545;
-    padding: 6px 12px;
-    font-size: 12px;
-    border-radius: 4px;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
 }
 
 .delete-btn:hover {
@@ -797,6 +806,104 @@ button:hover {
     background-color: #545b62;
 }
 
+/* Estilos para visualização de dados */
+.data-filters {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.data-detail-item {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 10px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.data-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e9ecef;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.data-detail-header strong {
+    color: #495057;
+    font-size: 16px;
+}
+
+.data-detail-user {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.data-detail-date {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.data-detail-items {
+    display: grid;
+    gap: 8px;
+}
+
+.data-item {
+    background-color: #f8f9fa;
+    padding: 10px 15px;
+    border-radius: 5px;
+    border-left: 3px solid #16a34a;
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 15px;
+    align-items: center;
+}
+
+.data-item.dry-boxes {
+    grid-template-columns: 2fr 1fr;
+}
+
+.item-product {
+    font-weight: 600;
+    color: #495057;
+}
+
+.item-box {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.item-quantity {
+    color: #16a34a;
+    font-weight: 600;
+    text-align: right;
+}
+
+#dataNavigation {
+    margin-bottom: 20px;
+}
+
+#dataNavigation button {
+    background-color: #6c757d;
+    color: white;
+    padding: 8px 16px;
+    margin-right: 10px;
+    font-size: 14px;
+}
+
+#dataNavigation button:hover {
+    background-color: #545b62;
+}
+
 /* Estilos para emails com configurações */
 .email-item {
     background-color: #f8f9fa;
@@ -862,77 +969,97 @@ button:hover {
         padding: 15px;
         margin: 10px;
     }
-    
+
     .header-container {
         flex-direction: column;
         gap: 15px;
     }
-    
+
     .logo {
         height: 60px;
     }
-    
+
     h1 {
         font-size: 1.8em;
         text-align: center;
     }
-    
+
     .tabs {
         flex-direction: column;
     }
-    
+
     .tab-button {
         margin-bottom: 5px;
         border-radius: 5px;
     }
+
     
-    .manager-filters {
-        grid-template-columns: 1fr;
-    }
-    
+
     #managerView {
         grid-template-columns: 1fr;
     }
-    
+
     .countdown {
         font-size: 1.8em;
     }
-    
+
     .config-row {
         grid-template-columns: 1fr;
     }
-    
+
     .manager-tabs {
         flex-direction: column;
     }
-    
+
     .manager-tab-button {
         margin-bottom: 3px;
         border-radius: 5px;
     }
-    
+
     .email-item {
         flex-direction: column;
         align-items: flex-start;
         gap: 10px;
     }
-    
+
     .email-info {
         margin-right: 0;
         width: 100%;
     }
-    
+
     .email-options {
         gap: 10px;
     }
-    
+
     .pending-item {
         flex-direction: column;
         align-items: flex-start;
         gap: 10px;
     }
-    
+
     .pending-count, .pending-arrow {
         align-self: flex-end;
+    }
+
+    .data-filters {
+        grid-template-columns: 1fr;
+    }
+
+    .data-detail-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .data-item {
+        grid-template-columns: 1fr;
+        gap: 5px;
+    }
+
+    .data-item.dry-boxes {
+        grid-template-columns: 1fr;
+    }
+
+    .item-quantity {
+        text-align: left;
     }
 }

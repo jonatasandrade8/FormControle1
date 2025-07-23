@@ -30,26 +30,21 @@
 
             <form id="stockForm">
                 <div class="form-group">
-                    <label for="user">Usuário:</label>
-                    <select id="user" name="user" required>
-                        <option value="">Selecione um usuário</option>
-                        <option value="João Silva">João Silva</option>
-                        <option value="Maria Santos">Maria Santos</option>
-                        <option value="Pedro Costa">Pedro Costa</option>
-                        <option value="Ana Oliveira">Ana Oliveira</option>
-                        <option value="Carlos Ferreira">Carlos Ferreira</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
                     <label for="state">Estado:</label>
-                    <select id="state" name="state" required onchange="updateNetworksByState()">
+                    <select id="state" name="state" required onchange="updateNetworksByState(); updateUsersByState()">
                         <option value="">Selecione um estado</option>
                         <option value="Rio Grande do Norte">Rio Grande do Norte</option>
                         <option value="São Paulo">São Paulo</option>
                         <option value="Rio de Janeiro">Rio de Janeiro</option>
                         <option value="Minas Gerais">Minas Gerais</option>
                         <option value="Bahia">Bahia</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="user">Usuário:</label>
+                    <select id="user" name="user" required>
+                        <option value="">Selecione um usuário</option>
                     </select>
                 </div>
 
@@ -98,7 +93,7 @@
             </div>
 
             <div id="submissionStatus">
-                <h3>Status dos Envios da Região</h3>
+                <h3>Status dos Envios da Rede</h3>
                 <div id="inventorySubmissions"></div>
             </div>
         </div>
@@ -112,26 +107,21 @@
 
             <form id="dryBoxesForm">
                 <div class="form-group">
-                    <label for="dryUser">Usuário:</label>
-                    <select id="dryUser" name="dryUser" required>
-                        <option value="">Selecione um usuário</option>
-                        <option value="João Silva">João Silva</option>
-                        <option value="Maria Santos">Maria Santos</option>
-                        <option value="Pedro Costa">Pedro Costa</option>
-                        <option value="Ana Oliveira">Ana Oliveira</option>
-                        <option value="Carlos Ferreira">Carlos Ferreira</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
                     <label for="dryState">Estado:</label>
-                    <select id="dryState" name="dryState" required onchange="updateDryNetworksByState()">
+                    <select id="dryState" name="dryState" required onchange="updateDryNetworksByState(); updateDryUsersByState()">
                         <option value="">Selecione um estado</option>
                         <option value="Rio Grande do Norte">Rio Grande do Norte</option>
                         <option value="São Paulo">São Paulo</option>
                         <option value="Rio de Janeiro">Rio de Janeiro</option>
                         <option value="Minas Gerais">Minas Gerais</option>
                         <option value="Bahia">Bahia</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dryUser">Usuário:</label>
+                    <select id="dryUser" name="dryUser" required>
+                        <option value="">Selecione um usuário</option>
                     </select>
                 </div>
 
@@ -175,7 +165,7 @@
             </div>
 
             <div id="dryBoxesSubmissionStatus">
-                <h3>Status dos Envios de Caixas Secas da Região</h3>
+                <h3>Status dos Envios de Caixas Secas da Rede</h3>
                 <div id="dryBoxesSubmissions"></div>
             </div>
         </div>
@@ -208,42 +198,24 @@
                     <button id="logoutManager" class="logout-btn">Sair</button>
                 </div>
                 
-                <div class="manager-filters">
-                    <div class="form-group">
-                        <label for="managerState">Filtrar por Estado:</label>
-                        <select id="managerState" onchange="updateManagerView()">
-                            <option value="">Todos os estados</option>
-                            <option value="Rio Grande do Norte">Rio Grande do Norte</option>
-                            <option value="São Paulo">São Paulo</option>
-                            <option value="Rio de Janeiro">Rio de Janeiro</option>
-                            <option value="Minas Gerais">Minas Gerais</option>
-                            <option value="Bahia">Bahia</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="managerNetwork">Filtrar por Rede:</label>
-                        <select id="managerNetwork" onchange="updateManagerView()">
-                            <option value="">Todas as redes</option>
-                        </select>
-                    </div>
-                </div>
+                
 
                 <!-- Abas de navegação para gestores -->
                 <div class="manager-tabs">
-                    <button class="manager-tab-button active" onclick="showManagerTab('view')">Visualizar Dados</button>
-                    <button class="manager-tab-button" onclick="showManagerTab('pending')">Usuários Pendentes</button>
+                    <button class="manager-tab-button active" onclick="showManagerTab('pending')">Envios Pendentes</button>
+                    <button class="manager-tab-button" onclick="showManagerTab('data')">Dados</button>
+                    <button class="manager-tab-button" onclick="showManagerTab('users')">Usuários Pendentes</button>
                     <button class="manager-tab-button" onclick="showManagerTab('config')">Configurações</button>
                 </div>
 
-                <!-- Aba de visualização de dados -->
-                <div id="managerViewTab" class="manager-tab-content active">
+                <!-- Aba de envios pendentes -->
+                <div id="managerPendingTab" class="manager-tab-content active">
                     <div id="managerView">
                         <div id="inventoryView">
                             <h3>Inventário Diário</h3>
                             <div id="managerInventoryData"></div>
                             
-                            <h4>Lista de Envios Pendentes</h4>
+                            <h4>Lista de Envios Automáticos Pendentes</h4>
                             <div id="managerInventoryQueue"></div>
                         </div>
                         
@@ -251,14 +223,63 @@
                             <h3>Caixas Secas</h3>
                             <div id="managerDryBoxesData"></div>
                             
-                            <h4>Lista de Envios Pendentes</h4>
+                            <h4>Lista de Envios Automáticos Pendentes</h4>
                             <div id="managerDryBoxesQueue"></div>
                         </div>
                     </div>
                 </div>
 
+                <!-- Aba de dados organizados -->
+                <div id="managerDataTab" class="manager-tab-content">
+                    <h3>Dados de Estoque</h3>
+                    
+                    <div class="data-filters">
+                        <div class="form-group">
+                            <label for="dataType">Tipo de Dados:</label>
+                            <select id="dataType" onchange="updateDataView()">
+                                <option value="inventory">Inventário Diário</option>
+                                <option value="dryBoxes">Caixas Secas</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="dataState">Estado:</label>
+                            <select id="dataState" onchange="updateDataNetworks(); updateDataView()">
+                                <option value="">Todos os estados</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="dataNetwork">Rede:</label>
+                            <select id="dataNetwork" onchange="updateDataView()">
+                                <option value="">Todas as redes</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="dataNavigation">
+                        <button id="backToDataStates" onclick="showDataStates()" style="display: none;">← Voltar aos Estados</button>
+                        <button id="backToDataNetworks" onclick="showDataNetworks()" style="display: none;">← Voltar às Redes</button>
+                    </div>
+
+                    <div id="dataView">
+                        <div id="dataStatesView">
+                            <h4>Estados com Dados</h4>
+                            <div id="dataStatesList"></div>
+                        </div>
+                        
+                        <div id="dataNetworksView" style="display: none;">
+                            <h4 id="dataNetworksTitle">Redes no Estado</h4>
+                            <div id="dataNetworksList"></div>
+                        </div>
+                        
+                        <div id="dataDetailsView" style="display: none;">
+                            <h4 id="dataDetailsTitle">Dados Detalhados</h4>
+                            <div id="dataDetailsList"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Aba de usuários pendentes -->
-                <div id="managerPendingTab" class="manager-tab-content">
+                <div id="managerUsersTab" class="manager-tab-content">
                     <h3>Usuários que Ainda Não Enviaram</h3>
                     
                     <div class="pending-filters">
@@ -398,9 +419,23 @@
                         <h4>Gerenciar Usuários</h4>
                         <div class="config-row">
                             <div class="form-group">
+                                <label for="newUserState">Estado:</label>
+                                <select id="newUserState" required>
+                                    <option value="">Selecione um estado</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
                                 <label for="newUser">Novo Usuário:</label>
                                 <input type="text" id="newUser" placeholder="Nome do usuário">
                                 <button onclick="addUser()">Adicionar</button>
+                            </div>
+                        </div>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="userState">Filtrar por Estado:</label>
+                                <select id="userState">
+                                    <option value="">Todos os estados</option>
+                                </select>
                             </div>
                             <div class="form-group">
                                 <label for="searchUser">Buscar Usuário:</label>
@@ -410,7 +445,7 @@
                             </div>
                         </div>
                         <div class="list-container">
-                            <h5>Usuários Cadastrados:</h5>
+                            <h5>Usuários por Estado:</h5>
                             <div id="usersList"></div>
                         </div>
                     </div>
