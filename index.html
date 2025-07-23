@@ -4,14 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Contagem de Estoque</title>
+    <title>Sistema de Contagem</title>
     <link href="style.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
     <div class="container">
         <div class="header-container">
             <img src="attached_assets/QDELICIA-FRUTAS_1753234853017.webp" alt="Q Delícia Frutas" class="logo">
-            <h1>Sistema de Contagem de Estoque</h1>
+            <h1>Sistema de Contagem</h1>
         </div>
         
         <!-- Abas de navegação -->
@@ -301,28 +301,95 @@
                     <!-- Configuração de horários -->
                     <div class="config-section">
                         <h4>Horários de Envio Automático</h4>
-                        <div class="config-row">
-                            <div class="form-group">
-                                <label for="inventoryTime">Horário do Inventário Diário:</label>
-                                <input type="time" id="inventoryTime" value="13:00">
-                            </div>
-                            <div class="form-group">
-                                <label for="dryBoxesDay">Dia da Semana - Caixas Secas:</label>
-                                <select id="dryBoxesDay">
-                                    <option value="1" selected>Segunda-feira</option>
-                                    <option value="2">Terça-feira</option>
-                                    <option value="3">Quarta-feira</option>
-                                    <option value="4">Quinta-feira</option>
-                                    <option value="5">Sexta-feira</option>
-                                    <option value="6">Sábado</option>
-                                    <option value="0">Domingo</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="dryBoxesTime">Horário das Caixas Secas:</label>
-                                <input type="time" id="dryBoxesTime" value="13:00">
+                        
+                        <!-- Inventário Diário -->
+                        <div class="schedule-group">
+                            <h5>Inventário Diário</h5>
+                            <div class="config-row">
+                                <div class="form-group">
+                                    <label>Dias da Semana:</label>
+                                    <div class="days-checkboxes">
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay0" value="0">
+                                            Domingo
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay1" value="1" checked>
+                                            Segunda
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay2" value="2" checked>
+                                            Terça
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay3" value="3" checked>
+                                            Quarta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay4" value="4" checked>
+                                            Quinta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay5" value="5" checked>
+                                            Sexta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay6" value="6">
+                                            Sábado
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="inventoryTime">Horário:</label>
+                                    <input type="time" id="inventoryTime" value="13:00">
+                                </div>
                             </div>
                         </div>
+
+                        <!-- Caixas Secas -->
+                        <div class="schedule-group">
+                            <h5>Caixas Secas</h5>
+                            <div class="config-row">
+                                <div class="form-group">
+                                    <label>Dias da Semana:</label>
+                                    <div class="days-checkboxes">
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay0" value="0">
+                                            Domingo
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay1" value="1" checked>
+                                            Segunda
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay2" value="2">
+                                            Terça
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay3" value="3">
+                                            Quarta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay4" value="4">
+                                            Quinta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay5" value="5">
+                                            Sexta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay6" value="6">
+                                            Sábado
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="dryBoxesTime">Horário:</label>
+                                    <input type="time" id="dryBoxesTime" value="13:00">
+                                </div>
+                            </div>
+                        </div>
+                        
                         <button onclick="saveScheduleSettings()">Salvar Horários</button>
                     </div>
 

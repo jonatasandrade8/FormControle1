@@ -49,8 +49,9 @@ let pendingViewState = {
 // Configurações do sistema
 let systemConfig = {
     inventoryTime: "13:00",
-    dryBoxesDay: 1,
+    inventoryDays: [1, 2, 3, 4, 5], // Segunda a sexta por padrão
     dryBoxesTime: "13:00",
+    dryBoxesDays: [1], // Segunda por padrão
     users: ["João Silva", "Maria Santos", "Pedro Costa", "Ana Oliveira", "Carlos Ferreira"],
     emails: [
         { address: "admin@empresa.com", inventory: true, dryBoxes: true },
@@ -841,13 +842,39 @@ function updateCountdowns() {
 
 function updateInventoryCountdown() {
     const now = new Date();
-    const target = new Date();
     const [hours, minutes] = systemConfig.inventoryTime.split(':').map(Number);
-    target.setHours(hours, minutes, 0, 0);
     
-    if (now > target) {
-        target.setDate(target.getDate() + 1);
+    // Encontrar próximo dia configurado
+    const currentDay = now.getDay();
+    let nextTargetDay = null;
+    let daysUntilTarget = 7; // Máximo de uma semana
+    
+    // Verificar se hoje é um dia configurado e ainda não passou do horário
+    if (systemConfig.inventoryDays.includes(currentDay)) {
+        const todayTarget = new Date(now);
+        todayTarget.setHours(hours, minutes, 0, 0);
+        
+        if (now.getTime() < todayTarget.getTime()) {
+            nextTargetDay = currentDay;
+            daysUntilTarget = 0;
+        }
     }
+    
+    // Se não encontrou hoje, procurar próximo dia
+    if (nextTargetDay === null) {
+        for (let i = 1; i <= 7; i++) {
+            const checkDay = (currentDay + i) % 7;
+            if (systemConfig.inventoryDays.includes(checkDay)) {
+                nextTargetDay = checkDay;
+                daysUntilTarget = i;
+                break;
+            }
+        }
+    }
+    
+    const target = new Date(now);
+    target.setDate(now.getDate() + daysUntilTarget);
+    target.setHours(hours, minutes, 0, 0);
     
     const timeDiff = target - now;
     const remainingHours = Math.floor(timeDiff / (1000 * 60 * 60));
@@ -860,27 +887,39 @@ function updateInventoryCountdown() {
 
 function updateDryBoxesCountdown() {
     const now = new Date();
-    const target = new Date();
-    
-    // Encontrar próximo dia configurado
-    const dayOfWeek = now.getDay();
-    const targetDay = systemConfig.dryBoxesDay;
     const [hours, minutes] = systemConfig.dryBoxesTime.split(':').map(Number);
     
-    let daysUntilTarget;
-    if (targetDay === 0) { // Domingo
-        daysUntilTarget = dayOfWeek === 0 ? 0 : (7 - dayOfWeek);
-    } else {
-        daysUntilTarget = dayOfWeek <= targetDay ? (targetDay - dayOfWeek) : (7 - dayOfWeek + targetDay);
+    // Encontrar próximo dia configurado
+    const currentDay = now.getDay();
+    let nextTargetDay = null;
+    let daysUntilTarget = 7; // Máximo de uma semana
+    
+    // Verificar se hoje é um dia configurado e ainda não passou do horário
+    if (systemConfig.dryBoxesDays.includes(currentDay)) {
+        const todayTarget = new Date(now);
+        todayTarget.setHours(hours, minutes, 0, 0);
+        
+        if (now.getTime() < todayTarget.getTime()) {
+            nextTargetDay = currentDay;
+            daysUntilTarget = 0;
+        }
     }
     
+    // Se não encontrou hoje, procurar próximo dia
+    if (nextTargetDay === null) {
+        for (let i = 1; i <= 7; i++) {
+            const checkDay = (currentDay + i) % 7;
+            if (systemConfig.dryBoxesDays.includes(checkDay)) {
+                nextTargetDay = checkDay;
+                daysUntilTarget = i;
+                break;
+            }
+        }
+    }
+    
+    const target = new Date(now);
     target.setDate(now.getDate() + daysUntilTarget);
     target.setHours(hours, minutes, 0, 0);
-    
-    // Se é hoje e ainda não passou do horário
-    if (daysUntilTarget === 0 && now.getTime() > target.getTime()) {
-        target.setDate(target.getDate() + 7);
-    }
     
     const timeDiff = target - now;
     const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
@@ -897,9 +936,12 @@ function processAutomaticSubmissions() {
     const now = new Date();
     const [inventoryHours, inventoryMinutes] = systemConfig.inventoryTime.split(':').map(Number);
     const [dryBoxesHours, dryBoxesMinutes] = systemConfig.dryBoxesTime.split(':').map(Number);
+    const currentDay = now.getDay();
     
-    // Verificar envio de inventário (horário configurado todos os dias)
-    if (now.getHours() === inventoryHours && now.getMinutes() === inventoryMinutes) {
+    // Verificar envio de inventário (dias e horário configurados)
+    if (systemConfig.inventoryDays.includes(currentDay) && 
+        now.getHours() === inventoryHours && 
+        now.getMinutes() === inventoryMinutes) {
         if (inventorySubmissionQueue.length > 0) {
             console.log('Enviando inventários automaticamente para:', systemConfig.emails);
             console.log('Dados do inventário:', inventorySubmissionQueue);
@@ -908,8 +950,10 @@ function processAutomaticSubmissions() {
         }
     }
     
-    // Verificar envio de caixas secas (dia e horário configurados)
-    if (now.getDay() === systemConfig.dryBoxesDay && now.getHours() === dryBoxesHours && now.getMinutes() === dryBoxesMinutes) {
+    // Verificar envio de caixas secas (dias e horário configurados)
+    if (systemConfig.dryBoxesDays.includes(currentDay) && 
+        now.getHours() === dryBoxesHours && 
+        now.getMinutes() === dryBoxesMinutes) {
         if (dryBoxesSubmissionQueue.length > 0) {
             console.log('Enviando caixas secas automaticamente para:', systemConfig.emails);
             console.log('Dados das caixas secas:', dryBoxesSubmissionQueue);
@@ -985,8 +1029,23 @@ document.getElementById('logoutManager').addEventListener('click', function() {
 function initializeConfigurationData() {
     // Inicializar horários
     document.getElementById('inventoryTime').value = systemConfig.inventoryTime;
-    document.getElementById('dryBoxesDay').value = systemConfig.dryBoxesDay;
     document.getElementById('dryBoxesTime').value = systemConfig.dryBoxesTime;
+    
+    // Inicializar dias do inventário
+    for (let i = 0; i <= 6; i++) {
+        const checkbox = document.getElementById(`inventoryDay${i}`);
+        if (checkbox) {
+            checkbox.checked = systemConfig.inventoryDays.includes(i);
+        }
+    }
+    
+    // Inicializar dias das caixas secas
+    for (let i = 0; i <= 6; i++) {
+        const checkbox = document.getElementById(`dryBoxesDay${i}`);
+        if (checkbox) {
+            checkbox.checked = systemConfig.dryBoxesDays.includes(i);
+        }
+    }
     
     // Iniciar com listas escondidas
     hideAllUsers();
@@ -1021,8 +1080,35 @@ function updateConfigSelects() {
 
 function saveScheduleSettings() {
     systemConfig.inventoryTime = document.getElementById('inventoryTime').value;
-    systemConfig.dryBoxesDay = parseInt(document.getElementById('dryBoxesDay').value);
     systemConfig.dryBoxesTime = document.getElementById('dryBoxesTime').value;
+    
+    // Coletar dias selecionados para inventário
+    systemConfig.inventoryDays = [];
+    for (let i = 0; i <= 6; i++) {
+        const checkbox = document.getElementById(`inventoryDay${i}`);
+        if (checkbox && checkbox.checked) {
+            systemConfig.inventoryDays.push(i);
+        }
+    }
+    
+    // Coletar dias selecionados para caixas secas
+    systemConfig.dryBoxesDays = [];
+    for (let i = 0; i <= 6; i++) {
+        const checkbox = document.getElementById(`dryBoxesDay${i}`);
+        if (checkbox && checkbox.checked) {
+            systemConfig.dryBoxesDays.push(i);
+        }
+    }
+    
+    if (systemConfig.inventoryDays.length === 0) {
+        showStatus('Selecione pelo menos um dia para o inventário!', 'error');
+        return;
+    }
+    
+    if (systemConfig.dryBoxesDays.length === 0) {
+        showStatus('Selecione pelo menos um dia para as caixas secas!', 'error');
+        return;
+    }
     
     showStatus('Configurações de horário salvas com sucesso!', 'success');
 }
@@ -1551,6 +1637,52 @@ function showPendingStates() {
 }
 
 function showPendingNetworks(stateName) {
+    if (typeof stateName === 'undefined' && pendingViewState.selectedState) {
+        stateName = pendingViewState.selectedState;
+    }
+    
+    const type = document.getElementById('pendingType').value;
+    
+    pendingViewState.level = 'networks';
+    pendingViewState.selectedState = stateName;
+    
+    // Atualizar navegação
+    document.getElementById('backToPendingStates').style.display = 'inline-block';
+    document.getElementById('backToPendingNetworks').style.display = 'none';
+    
+    // Mostrar apenas a view de redes
+    document.getElementById('pendingStatesView').style.display = 'none';
+    document.getElementById('pendingNetworksView').style.display = 'block';
+    document.getElementById('pendingUsersView').style.display = 'none';
+    
+    document.getElementById('pendingNetworksTitle').textContent = `Redes em ${stateName}`;
+    
+    const container = document.getElementById('pendingNetworksList');
+    let html = '';
+    
+    if (networksByState[stateName]) {
+        networksByState[stateName].forEach(network => {
+            const pendingCount = getPendingUsersCountByNetwork(stateName, network, type);
+            if (pendingCount > 0) {
+                html += `
+                    <div class="pending-item" onclick="showPendingUsers('${stateName}', '${network}')">
+                        <span class="pending-name">${network}</span>
+                        <span class="pending-count">${pendingCount} usuários ainda não enviaram</span>
+                        <span class="pending-arrow">→</span>
+                    </div>
+                `;
+            }
+        });
+    }
+    
+    if (html === '') {
+        html = '<p>Todos os usuários desta rede já enviaram!</p>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function showPendingNetworksOriginal(stateName) {
     const type = document.getElementById('pendingType').value;
     
     pendingViewState.level = 'networks';
