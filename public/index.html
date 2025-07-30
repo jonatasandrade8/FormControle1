@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Contagem</title>
+    <link href="style.css" rel="stylesheet" type="text/css" />
+    <!-- Remova as tags de script CDN do Firebase que estavam aqui -->
+</head>
+<body>
+    <div class="container">
+        <div class="header-container">
+            <img src="attached_assets/QDELICIA-FRUTAS_1753234853017.webp" alt="Q Delícia Frutas" class="logo">
+            <h1>Sistema de Contagem</h1>
+        </div>
+        
+        <!-- Abas de navegação -->
+        <div class="tabs">
+            <button class="tab-button active" onclick="showTab('inventory')">Inventário Diário</button>
+            <button class="tab-button" onclick="showTab('dryBoxes')">Caixas Secas</button>
+            <button class="tab-button" onclick="showTab('manager')">Gestores</button>
+        </div>
+
+        <!-- Aba de Inventário Diário -->
+        <div id="inventoryTab" class="tab-content active">
+            <div class="countdown-container">
+                <h3>Tempo restante para envio:</h3>
+                <div id="inventoryCountdown" class="countdown"></div>
+            </div>
+
+            <form id="stockForm">
+                <div class="form-group">
+                    <label for="state">Estado:</label>
+                    <select id="state" name="state" required onchange="updateNetworksByState(); updateUsersByState()">
+                        <option value="">Selecione um estado</option>
+                        <option value="Rio Grande do Norte">Rio Grande do Norte</option>
+                        <option value="São Paulo">São Paulo</option>
+                        <option value="Rio de Janeiro">Rio de Janeiro</option>
+                        <option value="Minas Gerais">Minas Gerais</option>
+                        <option value="Bahia">Bahia</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="user">Usuário:</label>
+                    <select id="user" name="user" required>
+                        <option value="">Selecione um usuário</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="network">Rede de Lojas:</label>
+                    <select id="network" name="network" required onchange="updateStores()">
+                        <option value="">Selecione uma rede</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="store">Loja:</label>
+                    <select id="store" name="store" required>
+                        <option value="">Selecione uma loja</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="productType">Tipo do Produto:</label>
+                    <input type="text" id="productType" name="productType" required placeholder="Ex: Banana pacovan, Banana prata...">
+                </div>
+
+                <div class="form-group">
+                    <label for="boxType">Tipo de Caixa:</label>
+                    <select id="boxType" name="boxType" required>
+                        <option value="">Selecione o tipo de caixa</option>
+                        <option value="Pequena">P</option>
+                        <option value="Média">G</option>
+                        <option value="Grande">IFCO</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="quantity">Quantidade de Caixas:</label>
+                    <input type="number" id="quantity" name="quantity" required min="0" placeholder="0">
+                </div>
+
+                <button type="submit">Adicionar Item</button>
+            </form>
+
+            <div id="itemsList">
+                <h2>Itens Adicionados</h2>
+                <div id="items"></div>
+                <button id="submitInventory" style="display: none;" onclick="submitToQueue('inventory')">Adicionar à Lista de Envio</button>
+            </div>
+
+            <div id="submissionStatus">
+                <h3>Status dos Envios da Rede</h3>
+                <div id="inventorySubmissions"></div>
+            </div>
+        </div>
+
+        <!-- Aba de Caixas Secas -->
+        <div id="dryBoxesTab" class="tab-content">
+            <div class="countdown-container">
+                <h3>Tempo restante para envio (próxima segunda-feira):</h3>
+                <div id="dryBoxesCountdown" class="countdown"></div>
+            </div>
+
+            <form id="dryBoxesForm">
+                <div class="form-group">
+                    <label for="dryState">Estado:</label>
+                    <select id="dryState" name="dryState" required onchange="updateDryNetworksByState(); updateDryUsersByState()">
+                        <option value="">Selecione um estado</option>
+                        <option value="Rio Grande do Norte">Rio Grande do Norte</option>
+                        <option value="São Paulo">São Paulo</option>
+                        <option value="Rio de Janeiro">Rio de Janeiro</option>
+                        <option value="Minas Gerais">Minas Gerais</option>
+                        <option value="Bahia">Bahia</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dryUser">Usuário:</label>
+                    <select id="dryUser" name="dryUser" required>
+                        <option value="">Selecione um usuário</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dryNetwork">Rede de Lojas:</label>
+                    <select id="dryNetwork" name="dryNetwork" required onchange="updateDryStores()">
+                        <option value="">Selecione uma rede</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dryStore">Loja:</label>
+                    <select id="dryStore" name="dryStore" required>
+                        <option value="">Selecione uma loja</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dryBoxType">Tipo de Caixa Seca:</label>
+                    <select id="dryBoxType" name="dryBoxType" required>
+                        <option value="">Selecione o tipo de caixa</option>
+                        <option value="Caixa Seca Pequena">Caixa Seca Pequena</option>
+                        <option value="Caixa Seca Média">Caixa Seca Média</option>
+                        <option value="Caixa Seca Grande">Caixa Seca Grande</option>
+                        <option value="Caixa Seca Extra Grande">Caixa Seca Extra Grande</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dryQuantity">Quantidade de Caixas:</label>
+                    <input type="number" id="dryQuantity" name="dryQuantity" required min="0" placeholder="0">
+                </div>
+
+                <button type="submit">Adicionar Caixa Seca</button>
+            </form>
+
+            <div id="dryBoxesList">
+                <h2>Caixas Secas Adicionadas</h2>
+                <div id="dryBoxesItems"></div>
+                <button id="submitDryBoxes" style="display: none;" onclick="submitToQueue('dryBoxes')">Adicionar à Lista de Envio</button>
+            </div>
+
+            <div id="dryBoxesSubmissionStatus">
+                <h3>Status dos Envios de Caixas Secas da Rede</h3>
+                <div id="dryBoxesSubmissions"></div>
+            </div>
+        </div>
+
+        <!-- Aba de Gestores -->
+        <div id="managerTab" class="tab-content">
+            <h2>Visualização de Estoques - Gestores</h2>
+            
+            <!-- Tela de login para gestores -->
+            <div id="managerLogin" class="manager-login">
+                <div class="login-container">
+                    <h3>Acesso Restrito - Gestores</h3>
+                    <form id="managerLoginForm">
+                        <div class="form-group">
+                            <label for="managerPassword">Senha:</label>
+                            <input type="password" id="managerPassword" name="managerPassword" required placeholder="Digite a senha de gestor">
+                        </div>
+                        <button type="submit">Entrar</button>
+                    </form>
+                    <div id="loginError" class="login-error" style="display: none;">
+                        Senha incorreta. Tente novamente.
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Área dos gestores (oculta inicialmente) -->
+            <div id="managerArea" style="display: none;">
+                <div class="manager-header">
+                    <h3>Área dos Gestores</h3>
+                    <button id="logoutManager" class="logout-btn">Sair</button>
+                </div>
+                
+                
+
+                <!-- Abas de navegação para gestores -->
+                <div class="manager-tabs">
+                    <button class="manager-tab-button active" onclick="showManagerTab('pending')">Envios Pendentes</button>
+                    <button class="manager-tab-button" onclick="showManagerTab('data')">Dados</button>
+                    <button class="manager-tab-button" onclick="showManagerTab('users')">Usuários Pendentes</button>
+                    <button class="manager-tab-button" onclick="showManagerTab('config')">Configurações</button>
+                </div>
+
+                <!-- Aba de envios pendentes -->
+                <div id="managerPendingTab" class="manager-tab-content active">
+                    <div id="managerView">
+                        <div id="inventoryView">
+                            <h3>Inventário Diário</h3>
+                            <div id="managerInventoryData"></div>
+                            
+                            <h4>Lista de Envios Automáticos Pendentes</h4>
+                            <div id="managerInventoryQueue"></div>
+                        </div>
+                        
+                        <div id="dryBoxesView">
+                            <h3>Caixas Secas</h3>
+                            <div id="managerDryBoxesData"></div>
+                            
+                            <h4>Lista de Envios Automáticos Pendentes</h4>
+                            <div id="managerDryBoxesQueue"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aba de dados organizados -->
+                <div id="managerDataTab" class="manager-tab-content">
+                    <h3>Dados de Estoque</h3>
+                    
+                    <div class="data-filters">
+                        <div class="form-group">
+                            <label for="dataType">Tipo de Dados:</label>
+                            <select id="dataType" onchange="updateDataView()">
+                                <option value="inventory">Inventário Diário</option>
+                                <option value="dryBoxes">Caixas Secas</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="dataState">Estado:</label>
+                            <select id="dataState" onchange="updateDataNetworks(); updateDataView()">
+                                <option value="">Todos os estados</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="dataNetwork">Rede:</label>
+                            <select id="dataNetwork" onchange="updateDataView()">
+                                <option value="">Todas as redes</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="dataNavigation">
+                        <button id="backToDataStates" onclick="showDataStates()" style="display: none;">← Voltar aos Estados</button>
+                        <button id="backToDataNetworks" onclick="showDataNetworks()" style="display: none;">← Voltar às Redes</button>
+                    </div>
+
+                    <div id="dataView">
+                        <div id="dataStatesView">
+                            <h4>Estados com Dados</h4>
+                            <div id="dataStatesList"></div>
+                        </div>
+                        
+                        <div id="dataNetworksView" style="display: none;">
+                            <h4 id="dataNetworksTitle">Redes no Estado</h4>
+                            <div id="dataNetworksList"></div>
+                        </div>
+                        
+                        <div id="dataDetailsView" style="display: none;">
+                            <h4 id="dataDetailsTitle">Dados Detalhados</h4>
+                            <div id="dataDetailsList"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aba de usuários pendentes -->
+                <div id="managerUsersTab" class="manager-tab-content">
+                    <h3>Usuários que Ainda Não Enviaram</h3>
+                    
+                    <div class="pending-filters">
+                        <div class="form-group">
+                            <label for="pendingType">Tipo de Envio:</label>
+                            <select id="pendingType" onchange="updatePendingView()">
+                                <option value="inventory">Inventário Diário</option>
+                                <option value="dryBoxes">Caixas Secas</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="pendingNavigation">
+                        <button id="backToPendingStates" onclick="showPendingStates()" style="display: none;">← Voltar aos Estados</button>
+                        <button id="backToPendingNetworks" onclick="showPendingNetworks()" style="display: none;">← Voltar às Redes</button>
+                    </div>
+
+                    <div id="pendingView">
+                        <div id="pendingStatesView">
+                            <h4>Estados com Usuários Pendentes</h4>
+                            <div id="pendingStatesList"></div>
+                        </div>
+                        
+                        <div id="pendingNetworksView" style="display: none;">
+                            <h4 id="pendingNetworksTitle">Redes no Estado</h4>
+                            <div id="pendingNetworksList"></div>
+                        </div>
+                        
+                        <div id="pendingUsersView" style="display: none;">
+                            <h4 id="pendingUsersTitle">Usuários Pendentes</h4>
+                            <div id="pendingUsersList"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aba de configurações -->
+                <div id="managerConfigTab" class="manager-tab-content">
+                    <h3>Configurações do Sistema</h3>
+                    
+                    <!-- Configuração de horários -->
+                    <div class="config-section">
+                        <h4>Horários de Envio Automático</h4>
+                        
+                        <!-- Inventário Diário -->
+                        <div class="schedule-group">
+                            <h5>Inventário Diário</h5>
+                            <div class="config-row">
+                                <div class="form-group">
+                                    <label>Dias da Semana:</label>
+                                    <div class="days-checkboxes">
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay0" value="0">
+                                            Domingo
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay1" value="1" checked>
+                                            Segunda
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay2" value="2" checked>
+                                            Terça
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay3" value="3" checked>
+                                            Quarta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay4" value="4" checked>
+                                            Quinta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay5" value="5" checked>
+                                            Sexta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="inventoryDay6" value="6">
+                                            Sábado
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="inventoryTime">Horário:</label>
+                                    <input type="time" id="inventoryTime" value="13:00">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Caixas Secas -->
+                        <div class="schedule-group">
+                            <h5>Caixas Secas</h5>
+                            <div class="config-row">
+                                <div class="form-group">
+                                    <label>Dias da Semana:</label>
+                                    <div class="days-checkboxes">
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay0" value="0">
+                                            Domingo
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay1" value="1" checked>
+                                            Segunda
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay2" value="2">
+                                            Terça
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay3" value="3">
+                                            Quarta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay4" value="4">
+                                            Quinta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay5" value="5">
+                                            Sexta
+                                        </label>
+                                        <label class="day-checkbox">
+                                            <input type="checkbox" id="dryBoxesDay6" value="6">
+                                            Sábado
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="dryBoxesTime">Horário:</label>
+                                    <input type="time" id="dryBoxesTime" value="13:00">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button onclick="saveScheduleSettings()">Salvar Horários</button>
+                    </div>
+
+                    <!-- Configuração de usuários -->
+                    <div class="config-section">
+                        <h4>Gerenciar Usuários</h4>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="newUserState">Estado:</label>
+                                <select id="newUserState" required>
+                                    <option value="">Selecione um estado</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="newUser">Novo Usuário:</label>
+                                <input type="text" id="newUser" placeholder="Nome do usuário">
+                                <button onclick="addUser()">Adicionar</button>
+                            </div>
+                        </div>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="userState">Filtrar por Estado:</label>
+                                <select id="userState">
+                                    <option value="">Todos os estados</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="searchUser">Buscar Usuário:</label>
+                                <input type="text" id="searchUser" placeholder="Digite para buscar..." onkeyup="searchUsers()">
+                                <button onclick="showAllUsers()">Exibir Todos</button>
+                                <button onclick="hideAllUsers()">Esconder</button>
+                            </div>
+                        </div>
+                        <div class="list-container">
+                            <div class="list-header">
+                                <h5>Usuários por Estado:</h5>
+                                <div class="bulk-actions">
+                                    <button onclick="selectAllUsers()">Selecionar Todos</button>
+                                    <button onclick="deselectAllUsers()">Desmarcar Todos</button>
+                                    <button onclick="removeSelectedUsers()" class="remove-selected-btn">Remover Selecionados</button>
+                                </div>
+                            </div>
+                            <div id="usersList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Configuração de estados -->
+                    <div class="config-section">
+                        <h4>Gerenciar Estados</h4>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="newState">Novo Estado:</label>
+                                <input type="text" id="newState" placeholder="Nome do estado">
+                                <button onclick="addState()">Adicionar</button>
+                            </div>
+                            <div class="form-group">
+                                <label for="searchState">Buscar Estado:</label>
+                                <input type="text" id="searchState" placeholder="Digite para buscar..." onkeyup="searchStates()">
+                                <button onclick="showAllStates()">Exibir Todos</button>
+                                <button onclick="hideAllStates()">Esconder</button>
+                            </div>
+                        </div>
+                        <div class="list-container">
+                            <div class="list-header">
+                                <h5>Estados Cadastrados:</h5>
+                                <div class="bulk-actions">
+                                    <button onclick="selectAllStates()">Selecionar Todos</button>
+                                    <button onclick="deselectAllStates()">Desmarcar Todos</button>
+                                    <button onclick="removeSelectedStates()" class="remove-selected-btn">Remover Selecionados</button>
+                                </div>
+                            </div>
+                            <div id="statesList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Configuração de redes -->
+                    <div class="config-section">
+                        <h4>Gerenciar Redes de Lojas</h4>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="networkState">Estado:</label>
+                                <select id="networkState">
+                                    <option value="">Selecione um estado</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="newNetwork">Nova Rede:</label>
+                                <input type="text" id="newNetwork" placeholder="Nome da rede">
+                                <button onclick="addNetwork()">Adicionar</button>
+                            </div>
+                            <div class="form-group">
+                                <label for="searchNetwork">Buscar Rede:</label>
+                                <input type="text" id="searchNetwork" placeholder="Digite para buscar..." onkeyup="searchNetworks()">
+                                <button onclick="showAllNetworks()">Exibir Todos</button>
+                                <button onclick="hideAllNetworks()">Esconder</button>
+                            </div>
+                        </div>
+                        <div class="list-container">
+                            <div class="list-header">
+                                <h5>Redes por Estado:</h5>
+                                <div class="bulk-actions">
+                                    <button onclick="selectAllNetworks()">Selecionar Todos</button>
+                                    <button onclick="deselectAllNetworks()">Desmarcar Todos</button>
+                                    <button onclick="removeSelectedNetworks()" class="remove-selected-btn">Remover Selecionados</button>
+                                </div>
+                            </div>
+                            <div id="networksList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Configuração de lojas -->
+                    <div class="config-section">
+                        <h4>Gerenciar Lojas</h4>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="storeNetwork">Rede:</label>
+                                <select id="storeNetwork">
+                                    <option value="">Selecione uma rede</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="newStore">Nova Loja:</label>
+                                <input type="text" id="newStore" placeholder="Nome da loja">
+                                <button onclick="addStore()">Adicionar</button>
+                            </div>
+                            <div class="form-group">
+                                <label for="searchStore">Buscar Loja:</label>
+                                <input type="text" id="searchStore" placeholder="Digite para buscar..." onkeyup="searchStores()">
+                                <button onclick="showAllStores()">Exibir Todos</button>
+                                <button onclick="hideAllStores()">Esconder</button>
+                            </div>
+                        </div>
+                        <div class="list-container">
+                            <div class="list-header">
+                                <h5>Lojas por Rede:</h5>
+                                <div class="bulk-actions">
+                                    <button onclick="selectAllStores()">Selecionar Todos</button>
+                                    <button onclick="deselectAllStores()">Desmarcar Todos</button>
+                                    <button onclick="removeSelectedStores()" class="remove-selected-btn">Remover Selecionados</button>
+                                </div>
+                            </div>
+                            <div id="storesList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Configuração de emails -->
+                    <div class="config-section">
+                        <h4>Gerenciar Emails de Envio</h4>
+                        <div class="config-row">
+                            <div class="form-group">
+                                <label for="newEmail">Novo Email:</label>
+                                <input type="email" id="newEmail" placeholder="email@exemplo.com">
+                                <button onclick="addEmail()">Adicionar</button>
+                            </div>
+                        </div>
+                        <div class="list-container">
+                            <div class="list-header">
+                                <h5>Emails Cadastrados:</h5>
+                                <div class="bulk-actions">
+                                    <button onclick="selectAllEmails()">Selecionar Todos</button>
+                                    <button onclick="deselectAllEmails()">Desmarcar Todos</button>
+                                    <button onclick="removeSelectedEmails()" class="remove-selected-btn">Remover Selecionados</button>
+                                </div>
+                            </div>
+                            <div id="emailsList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Botão Salvar Configurações -->
+                    <div class="save-config-section">
+                        <button onclick="saveAllConfigurations()" class="save-config-btn">Salvar Todas as Configurações</button>
+                        <p class="save-config-description">Salva todas as configurações e atualiza todas as caixas de seleção do sistema.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="status"></div>
+    </div>
+
+    <!-- Adicione type="module" aqui -->
+    <script src="script.js" type="module"></script>
+</body>
+</html>
