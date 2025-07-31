@@ -1,2593 +1,1596 @@
+// script.js
+// Importe as funções necessárias do SDK do Firebase
+import { initializeApp } from "firebase/app";
+import { 
+    getFirestore, 
+    collection, 
+    addDoc, 
+    getDocs, 
+    query, 
+    where, 
+    orderBy, 
+    serverTimestamp,
+    doc,
+    deleteDoc,
+    setDoc,
+    updateDoc,
+    onSnapshot // Para escutar mudanças em tempo real (opcional, mas útil para listas)
+} from "firebase/firestore";
 
-// Dados das redes por estado
-const networksByState = {
-    "Rio Grande do Norte": ["Rede Nordeste", "Rede RN"],
-    "São Paulo": ["Rede Sul", "Rede Sudeste"],
-    "Rio de Janeiro": ["Rede Rio", "Rede Sudeste"],
-    "Minas Gerais": ["Rede Centro", "Rede Sudeste"],
-    "Bahia": ["Rede Nordeste", "Rede Bahia"]
+// Suas credenciais do Firebase
+const firebaseConfig = {
+    apiKey: "AIzaSyCaGscKmGV2Z6T-Pd6awZKQl3iWOhDeOTE",
+    authDomain: "formdata-95f6e.firebaseapp.com",
+    projectId: "formdata-95f6e",
+    storageBucket: "formdata-95f6e.firebasestorage.app",
+    messagingSenderId: "373934858331",
+    appId: "1:373934858331:web:90c3260a2ef71e8e511f7e",
+    measurementId: "G-NXFBKJTPGE"
 };
 
-// Dados das lojas por rede
-const storesByNetwork = {
-    "Rede Nordeste": ["Loja Nordeste Shopping", "Loja Nordeste Center", "Loja Nordeste Plaza"],
-    "Rede RN": ["Loja RN Shopping", "Rede RN Center", "Loja RN Plaza"],
-    "Rede Sul": ["Loja Sul Shopping", "Loja Sul Center", "Loja Sul Plaza"],
-    "Rede Sudeste": ["Loja Sudeste Shopping", "Loja Sudeste Center", "Loja Sudeste Plaza"],
-    "Rede Rio": ["Loja Rio Shopping", "Loja Rio Center", "Loja Rio Plaza"],
-    "Rede Centro": ["Loja Centro Shopping", "Loja Centro Mall", "Loja Centro Plaza"],
-    "Rede Bahia": ["Loja Bahia Shopping", "Loja Bahia Center", "Loja Bahia Plaza"]
+// Inicialize o Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app); // Obtenha a instância do Firestore
+
+// --- Variáveis globais para dados mestres (carregadas do Firestore) ---
+let allStates = [];
+let allUsers = [];
+let allNetworks = [];
+let allStores = [];
+let allEmails = [];
+let currentSchedule = {
+    inventory: { days: [], time: '13:00' },
+    dryBoxes: { days: [], time: '13:00' }
 };
 
-// Arrays para armazenar os itens
-let inventoryItems = [];
-let dryBoxesItems = [];
+// --- Funções de Utilitário ---
 
-// Listas de envio (simulam envios pendentes)
-let inventorySubmissionQueue = [];
-let dryBoxesSubmissionQueue = [];
+/**
+ * Exibe uma mensagem de status ou erro.
+ * @param {string} message A mensagem a ser exibida.
+ * @param {boolean} isError Se a mensagem é de erro (true) ou sucesso (false).
+ */
+function showStatusMessage(message, isError = false) {
+    const statusDiv = document.getElementById('status');
+    statusDiv.textContent = message;
+    statusDiv.className = isError ? 'status-error' : 'status-success';
+    statusDiv.style.display = 'block';
+    setTimeout(() => {
+        statusDiv.style.display = 'none';
+    }, 5000); // Esconde a mensagem após 5 segundos
+}
 
-// Status de envios por usuário/região/rede
-let submissionStatus = {
-    inventory: {},
-    dryBoxes: {}
-};
+/**
+ * Carrega os dados mestres (estados, usuários, redes, lojas, emails) do Firestore.
+ * Deve ser chamado no início e sempre que dados de configuração forem alterados.
+ */
+async function loadMasterData() {
+    try {
+        // Carregar estados
+        const statesSnapshot = await getDocs(collection(db, "states"));
+        allStates = statesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Carregar usuários
+        const usersSnapshot = await getDocs(collection(db, "users"));
+        allUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-// Senha dos gestores (em produção, isso deveria estar no backend)
-const MANAGER_PASSWORD = "gestor123";
+        // Carregar redes
+        const networksSnapshot = await getDocs(collection(db, "networks"));
+        allNetworks = networksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-// Estado de autenticação do gestor
-let managerAuthenticated = false;
+        // Carregar lojas
+        const storesSnapshot = await getDocs(collection(db, "stores"));
+        allStores = storesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-// Estado da navegação de usuários pendentes
-let pendingViewState = {
-    level: 'states', // 'states', 'networks', 'users'
-    selectedState: null,
-    selectedNetwork: null
-};
+        // Carregar emails (do documento de configurações)
+        const configDocRef = doc(db, "configs", "appConfig");
+        const configDoc = await getDocs(configDocRef);
+        if (configDoc.exists()) {
+            allEmails = configDoc.data().emails || [];
+            currentSchedule = configDoc.data().schedule || currentSchedule;
+            applyScheduleSettingsToUI(); // Aplica os horários carregados à UI
+        } else {
+            // Se o documento de config não existir, crie um com valores padrão
+            await setDoc(configDocRef, { emails: [], schedule: currentSchedule });
+        }
 
-// Estado da navegação de dados
-let dataViewState = {
-    level: 'states', // 'states', 'networks', 'details'
-    selectedState: null,
-    selectedNetwork: null
-};
 
-// Configurações do sistema
-let systemConfig = {
-    inventoryTime: "13:00",
-    inventoryDays: [1, 2, 3, 4, 5], // Segunda a sexta por padrão
-    dryBoxesTime: "13:00",
-    dryBoxesDays: [1], // Segunda por padrão
-    usersByState: {
-        "Rio Grande do Norte": ["João Silva", "Maria Santos"],
-        "São Paulo": ["Pedro Costa", "Ana Oliveira"],
-        "Rio de Janeiro": ["Carlos Ferreira"],
-        "Minas Gerais": [],
-        "Bahia": []
-    },
-    emails: [
-        { address: "admin@empresa.com", inventory: true, dryBoxes: true },
-        { address: "gestor@empresa.com", inventory: true, dryBoxes: true }
-    ]
-};
+        console.log("Dados mestres carregados:", { allStates, allUsers, allNetworks, allStores, allEmails, currentSchedule });
+        showStatusMessage("Dados mestres carregados com sucesso.");
+    } catch (error) {
+        console.error("Erro ao carregar dados mestres:", error);
+        showStatusMessage("Erro ao carregar dados mestres.", true);
+    }
+}
 
-// Função para mostrar/esconder abas
-function showTab(tabName) {
-    // Esconder todas as abas
+/**
+ * Popula um elemento <select> com opções.
+ * @param {string} selectId ID do elemento select.
+ * @param {Array<Object>} data Array de objetos com { id, name }.
+ * @param {string} placeholder Texto da opção padrão.
+ */
+function populateSelect(selectId, data, placeholder) {
+    const selectElement = document.getElementById(selectId);
+    if (!selectElement) {
+        console.warn(`Elemento select com ID ${selectId} não encontrado.`);
+        return;
+    }
+    selectElement.innerHTML = `<option value="">${placeholder}</option>`;
+    data.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.name; // Usar o nome como valor para facilitar a exibição
+        option.textContent = item.name;
+        option.dataset.docId = item.id; // Guardar o ID do documento do Firestore
+        selectElement.appendChild(option);
+    });
+}
+
+// --- Lógica de Abas ---
+function showTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
     });
-    
-    // Remover classe active de todos os botões
-    document.querySelectorAll('.tab-button').forEach(btn => {
-        btn.classList.remove('active');
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('active');
     });
-    
-    // Mostrar aba selecionada
-    document.getElementById(tabName + 'Tab').classList.add('active');
-    event.target.classList.add('active');
-    
-    // Verificar autenticação se for a aba de gestor
-    if (tabName === 'manager') {
-        checkManagerAuthentication();
+
+    document.getElementById(tabId + 'Tab').classList.add('active');
+    document.querySelector(`.tab-button[onclick="showTab('${tabId}')"]`).classList.add('active');
+
+    // Chamar função de carregamento quando a aba do gestor é ativada
+    if (tabId === 'manager' && document.getElementById('managerArea').style.display === 'block') {
+        loadManagerPendingData();
+        loadStatesForConfigDropdowns(); // Carrega estados para os selects de config
+        loadStatesForDataViewDropdown(); // Carrega estados para o filtro de dados
+        loadPendingUsersView(); // Carrega usuários pendentes
     }
 }
 
-// Função para mostrar/esconder abas de gestores
-function showManagerTab(tabName) {
-    // Esconder todas as abas de gestores
+function showManagerTab(tabId) {
     document.querySelectorAll('.manager-tab-content').forEach(tab => {
         tab.classList.remove('active');
     });
-    
-    // Remover classe active de todos os botões de gestores
-    document.querySelectorAll('.manager-tab-button').forEach(btn => {
-        btn.classList.remove('active');
+    document.querySelectorAll('.manager-tab-button').forEach(button => {
+        button.classList.remove('active');
     });
-    
-    // Mostrar aba selecionada
-    document.getElementById('manager' + tabName.charAt(0).toUpperCase() + tabName.slice(1) + 'Tab').classList.add('active');
-    event.target.classList.add('active');
-    
-    // Se for a aba de configurações, inicializar os dados
-    if (tabName === 'config') {
-        initializeConfigurationData();
+
+    const targetTabElement = document.getElementById('manager' + tabId.charAt(0).toUpperCase() + tabId.slice(1) + 'Tab');
+    if (targetTabElement) {
+        targetTabElement.classList.add('active');
     }
-    
-    // Se for a aba de usuários pendentes, inicializar a visualização
-    if (tabName === 'users') {
-        updatePendingView();
+    const targetButtonElement = document.querySelector(`.manager-tab-button[onclick="showManagerTab('${tabId}')"]`);
+    if (targetButtonElement) {
+        targetButtonElement.classList.add('active');
     }
-    
-    // Se for a aba de dados, inicializar a visualização
-    if (tabName === 'data') {
-        initializeDataView();
-        updateDataView();
-    }
-    
-    // Se for a aba de envios pendentes, atualizar a visualização do gestor
-    if (tabName === 'pending') {
-        updateManagerView();
+
+    // Carregar dados específicos da aba do gestor
+    if (tabId === 'pending') {
+        loadManagerPendingData();
+    } else if (tabId === 'data') {
+        loadStatesForDataViewDropdown();
+        loadDataView();
+    } else if (tabId === 'users') {
+        loadPendingUsersView();
+    } else if (tabId === 'config') {
+        loadStatesForConfigDropdowns();
+        applyScheduleSettingsToUI();
+        loadUsersInConfig();
+        loadStatesInConfig();
+        loadNetworksInConfig();
+        loadStoresInConfig();
+        loadEmailsInConfig();
     }
 }
 
-// Funções para atualizar redes e usuários baseado no estado
-function updateNetworksByState() {
-    const stateSelect = document.getElementById('state');
-    const networkSelect = document.getElementById('network');
-    const selectedState = stateSelect.value;
-    
-    networkSelect.innerHTML = '<option value="">Selecione uma rede</option>';
-    
-    if (selectedState && networksByState[selectedState]) {
-        networksByState[selectedState].forEach(network => {
-            const option = document.createElement('option');
-            option.value = network;
-            option.textContent = network;
-            networkSelect.appendChild(option);
-        });
-    }
-    
-    // Limpar seleção de loja
-    document.getElementById('store').innerHTML = '<option value="">Selecione uma loja</option>';
-    
-    // Atualizar status de envios
-    updateSubmissionStatus();
+// --- Lógica de Carregamento de Dropdowns (Formulários de Entrada) ---
+
+async function loadStatesForForms() {
+    populateSelect('state', allStates, 'Selecione um estado');
+    populateSelect('dryState', allStates, 'Selecione um estado');
 }
 
-function updateUsersByState() {
-    const stateSelect = document.getElementById('state');
-    const userSelect = document.getElementById('user');
-    const selectedState = stateSelect.value;
-    
-    userSelect.innerHTML = '<option value="">Selecione um usuário</option>';
-    
-    if (selectedState && systemConfig.usersByState[selectedState]) {
-        systemConfig.usersByState[selectedState].forEach(user => {
-            const option = document.createElement('option');
-            option.value = user;
-            option.textContent = user;
-            userSelect.appendChild(option);
-        });
-    }
+async function loadNetworksAndUsersForInventory() {
+    const selectedStateName = document.getElementById('state').value;
+    const selectedState = allStates.find(s => s.name === selectedStateName);
+
+    // Carregar usuários para o estado selecionado
+    const filteredUsers = selectedState ? allUsers.filter(u => u.stateId === selectedState.id) : [];
+    populateSelect('user', filteredUsers, 'Selecione um usuário');
+
+    // Carregar redes para o estado selecionado
+    const filteredNetworks = selectedState ? allNetworks.filter(n => n.stateId === selectedState.id) : [];
+    populateSelect('network', filteredNetworks, 'Selecione uma rede');
+
+    loadStoresForInventory(); // Limpa/atualiza as lojas
 }
 
-function updateDryNetworksByState() {
-    const stateSelect = document.getElementById('dryState');
-    const networkSelect = document.getElementById('dryNetwork');
-    const selectedState = stateSelect.value;
-    
-    networkSelect.innerHTML = '<option value="">Selecione uma rede</option>';
-    
-    if (selectedState && networksByState[selectedState]) {
-        networksByState[selectedState].forEach(network => {
-            const option = document.createElement('option');
-            option.value = network;
-            option.textContent = network;
-            networkSelect.appendChild(option);
-        });
-    }
-    
-    // Limpar seleção de loja
-    document.getElementById('dryStore').innerHTML = '<option value="">Selecione uma loja</option>';
-    
-    // Atualizar status de envios
-    updateSubmissionStatus();
+async function loadStoresForInventory() {
+    const selectedNetworkName = document.getElementById('network').value;
+    const selectedNetwork = allNetworks.find(n => n.name === selectedNetworkName);
+
+    const filteredStores = selectedNetwork ? allStores.filter(s => s.networkId === selectedNetwork.id) : [];
+    populateSelect('store', filteredStores, 'Selecione uma loja');
 }
 
-function updateDryUsersByState() {
-    const stateSelect = document.getElementById('dryState');
-    const userSelect = document.getElementById('dryUser');
-    const selectedState = stateSelect.value;
-    
-    userSelect.innerHTML = '<option value="">Selecione um usuário</option>';
-    
-    if (selectedState && systemConfig.usersByState[selectedState]) {
-        systemConfig.usersByState[selectedState].forEach(user => {
-            const option = document.createElement('option');
-            option.value = user;
-            option.textContent = user;
-            userSelect.appendChild(option);
-        });
-    }
+async function loadNetworksAndUsersForDryBoxes() {
+    const selectedStateName = document.getElementById('dryState').value;
+    const selectedState = allStates.find(s => s.name === selectedStateName);
+
+    const filteredUsers = selectedState ? allUsers.filter(u => u.stateId === selectedState.id) : [];
+    populateSelect('dryUser', filteredUsers, 'Selecione um usuário');
+
+    const filteredNetworks = selectedState ? allNetworks.filter(n => n.stateId === selectedState.id) : [];
+    populateSelect('dryNetwork', filteredNetworks, 'Selecione uma rede');
+
+    loadStoresForDryBoxes(); // Limpa/atualiza as lojas
 }
 
-// Funções para atualizar lojas baseado na rede
-function updateStores() {
-    const networkSelect = document.getElementById('network');
-    const storeSelect = document.getElementById('store');
-    const selectedNetwork = networkSelect.value;
-    
-    storeSelect.innerHTML = '<option value="">Selecione uma loja</option>';
-    
-    if (selectedNetwork && storesByNetwork[selectedNetwork]) {
-        storesByNetwork[selectedNetwork].forEach(store => {
-            const option = document.createElement('option');
-            option.value = store;
-            option.textContent = store;
-            storeSelect.appendChild(option);
-        });
-    }
-    
-    // Atualizar status de envios
-    updateSubmissionStatus();
+async function loadStoresForDryBoxes() {
+    const selectedNetworkName = document.getElementById('dryNetwork').value;
+    const selectedNetwork = allNetworks.find(n => n.name === selectedNetworkName);
+
+    const filteredStores = selectedNetwork ? allStores.filter(s => s.networkId === selectedNetwork.id) : [];
+    populateSelect('dryStore', filteredStores, 'Selecione uma loja');
 }
 
-function updateDryStores() {
-    const networkSelect = document.getElementById('dryNetwork');
-    const storeSelect = document.getElementById('dryStore');
-    const selectedNetwork = networkSelect.value;
-    
-    storeSelect.innerHTML = '<option value="">Selecione uma loja</option>';
-    
-    if (selectedNetwork && storesByNetwork[selectedNetwork]) {
-        storesByNetwork[selectedNetwork].forEach(store => {
-            const option = document.createElement('option');
-            option.value = store;
-            option.textContent = store;
-            storeSelect.appendChild(option);
-        });
-    }
-    
-    // Atualizar status de envios
-    updateSubmissionStatus();
-}
-
-// Formulário de inventário
-document.getElementById('stockForm').addEventListener('submit', function(e) {
+// --- Submissão de Formulários de Entrada ---
+async function submitInventoryForm(e) {
     e.preventDefault();
-    
-    const formData = new FormData(this);
-    const item = {
-        user: formData.get('user'),
-        state: formData.get('state'),
-        network: formData.get('network'),
-        store: formData.get('store'),
-        productType: formData.get('productType'),
-        boxType: formData.get('boxType'),
-        quantity: parseInt(formData.get('quantity'))
-    };
-    
-    inventoryItems.push(item);
-    updateInventoryDisplay();
-    
-    // Limpar campos específicos
-    document.getElementById('productType').value = '';
-    document.getElementById('boxType').value = '';
-    document.getElementById('quantity').value = '';
-    
-    document.getElementById('submitInventory').style.display = 'block';
-    showStatus('Item adicionado com sucesso!', 'success');
-});
 
-// Formulário de caixas secas
-document.getElementById('dryBoxesForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(this);
-    const item = {
-        user: formData.get('dryUser'),
-        state: formData.get('dryState'),
-        network: formData.get('dryNetwork'),
-        store: formData.get('dryStore'),
-        boxType: formData.get('dryBoxType'),
-        quantity: parseInt(formData.get('dryQuantity'))
-    };
-    
-    dryBoxesItems.push(item);
-    updateDryBoxesDisplay();
-    
-    // Limpar campos específicos
-    document.getElementById('dryBoxType').value = '';
-    document.getElementById('dryQuantity').value = '';
-    
-    document.getElementById('submitDryBoxes').style.display = 'block';
-    showStatus('Caixa seca adicionada com sucesso!', 'success');
-});
+    const stateName = document.getElementById('state').value;
+    const user = document.getElementById('user').value;
+    const networkName = document.getElementById('network').value;
+    const store = document.getElementById('store').value;
+    const productType = document.getElementById('productType').value;
+    const boxType = document.getElementById('boxType').value;
+    const quantity = parseInt(document.getElementById('quantity').value);
 
-// Função para atualizar exibição do inventário
-function updateInventoryDisplay() {
-    const itemsContainer = document.getElementById('items');
-    
-    if (inventoryItems.length === 0) {
-        itemsContainer.innerHTML = '<p>Nenhum item adicionado ainda.</p>';
-        document.getElementById('submitInventory').style.display = 'none';
+    // Obter os IDs dos documentos selecionados
+    const stateId = allStates.find(s => s.name === stateName)?.id;
+    const networkId = allNetworks.find(n => n.name === networkName)?.id;
+    const userId = allUsers.find(u => u.name === user && u.stateId === stateId)?.id; // Assumindo unicidade por estado
+    const storeId = allStores.find(s => s.name === store && s.networkId === networkId)?.id; // Assumindo unicidade por rede
+
+    if (!stateId || !userId || !networkId || !storeId) {
+        showStatusMessage("Por favor, selecione todos os campos obrigatórios (Estado, Usuário, Rede, Loja).", true);
         return;
     }
-    
-    const itemsByState = {};
-    inventoryItems.forEach((item, index) => {
-        if (!itemsByState[item.state]) {
-            itemsByState[item.state] = {};
-        }
-        if (!itemsByState[item.state][item.network]) {
-            itemsByState[item.state][item.network] = [];
-        }
-        itemsByState[item.state][item.network].push({...item, index});
-    });
-    
-    let html = '';
-    Object.keys(itemsByState).forEach(state => {
-        html += `<div class="state-group">
-            <div class="state-title">${state}</div>`;
-        
-        Object.keys(itemsByState[state]).forEach(network => {
-            html += `<div class="network-group">
-                <div class="network-title">${network}</div>`;
-            
-            itemsByState[state][network].forEach(item => {
-                html += `<div class="item">
-                    <div class="item-info">
-                        <strong>${item.productType}</strong> - ${item.store}
-                        <div class="item-details">
-                            Usuário: ${item.user} | Caixa: ${item.boxType} | Quantidade: ${item.quantity}
-                        </div>
-                    </div>
-                    <button class="remove-btn" onclick="removeInventoryItem(${item.index})">Remover</button>
-                </div>`;
-            });
-            
-            html += '</div>';
-        });
-        
-        html += '</div>';
-    });
-    
-    itemsContainer.innerHTML = html;
+
+    const inventoryData = {
+        state: stateName,
+        stateId: stateId,
+        user: user,
+        userId: userId,
+        network: networkName,
+        networkId: networkId,
+        store: store,
+        storeId: storeId,
+        productType: productType,
+        boxType: boxType,
+        quantity: quantity,
+        timestamp: serverTimestamp()
+    };
+
+    try {
+        await addDoc(collection(db, "inventory"), inventoryData);
+        showStatusMessage("Item de inventário adicionado com sucesso!");
+        document.getElementById('stockForm').reset();
+        // Recarregar os dropdowns após o reset se necessário ou apenas limpar as seleções
+        loadStatesForForms(); // Para re-selecionar o estado inicial
+        document.getElementById('network').innerHTML = '<option value="">Selecione uma rede</option>';
+        document.getElementById('user').innerHTML = '<option value="">Selecione um usuário</option>';
+        document.getElementById('store').innerHTML = '<option value="">Selecione uma loja</option>';
+        loadLatestInventoryItems(); // Atualizar a lista de itens adicionados
+    } catch (error) {
+        console.error("Erro ao adicionar item de inventário:", error);
+        showStatusMessage("Erro ao adicionar item de inventário.", true);
+    }
 }
 
-// Função para atualizar exibição das caixas secas
-function updateDryBoxesDisplay() {
-    const itemsContainer = document.getElementById('dryBoxesItems');
-    
-    if (dryBoxesItems.length === 0) {
-        itemsContainer.innerHTML = '<p>Nenhuma caixa seca adicionada ainda.</p>';
-        document.getElementById('submitDryBoxes').style.display = 'none';
+async function submitDryBoxesForm(e) {
+    e.preventDefault();
+
+    const dryStateName = document.getElementById('dryState').value;
+    const dryUser = document.getElementById('dryUser').value;
+    const dryNetworkName = document.getElementById('dryNetwork').value;
+    const dryStore = document.getElementById('dryStore').value;
+    const dryBoxType = document.getElementById('dryBoxType').value;
+    const dryQuantity = parseInt(document.getElementById('dryQuantity').value);
+
+    // Obter os IDs dos documentos selecionados
+    const dryStateId = allStates.find(s => s.name === dryStateName)?.id;
+    const dryNetworkId = allNetworks.find(n => n.name === dryNetworkName)?.id;
+    const dryUserId = allUsers.find(u => u.name === dryUser && u.stateId === dryStateId)?.id;
+    const dryStoreId = allStores.find(s => s.name === dryStore && s.networkId === dryNetworkId)?.id;
+
+    if (!dryStateId || !dryUserId || !dryNetworkId || !dryStoreId) {
+        showStatusMessage("Por favor, selecione todos os campos obrigatórios (Estado, Usuário, Rede, Loja).", true);
         return;
     }
-    
-    const itemsByState = {};
-    dryBoxesItems.forEach((item, index) => {
-        if (!itemsByState[item.state]) {
-            itemsByState[item.state] = {};
+
+    const dryBoxData = {
+        state: dryStateName,
+        stateId: dryStateId,
+        user: dryUser,
+        userId: dryUserId,
+        network: dryNetworkName,
+        networkId: dryNetworkId,
+        store: dryStore,
+        storeId: dryStoreId,
+        boxType: dryBoxType,
+        quantity: dryQuantity,
+        timestamp: serverTimestamp()
+    };
+
+    try {
+        await addDoc(collection(db, "dryBoxes"), dryBoxData);
+        showStatusMessage("Caixa seca adicionada com sucesso!");
+        document.getElementById('dryBoxesForm').reset();
+        loadStatesForForms();
+        document.getElementById('dryNetwork').innerHTML = '<option value="">Selecione uma rede</option>';
+        document.getElementById('dryUser').innerHTML = '<option value="">Selecione um usuário</option>';
+        document.getElementById('dryStore').innerHTML = '<option value="">Selecione uma loja</option>';
+        loadLatestDryBoxItems(); // Atualizar a lista de itens adicionados
+    } catch (error) {
+        console.error("Erro ao adicionar caixa seca:", error);
+        showStatusMessage("Erro ao adicionar caixa seca.", true);
+    }
+}
+
+// Função para exibir os últimos itens adicionados ( Inventário )
+async function loadLatestInventoryItems() {
+    const itemsDiv = document.getElementById('items');
+    itemsDiv.innerHTML = 'Carregando itens...';
+    try {
+        const q = query(collection(db, "inventory"), orderBy("timestamp", "desc"), limit(5)); // Pega os últimos 5
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            itemsDiv.innerHTML = '<p>Nenhum item de inventário adicionado ainda.</p>';
+            return;
         }
-        if (!itemsByState[item.state][item.network]) {
-            itemsByState[item.state][item.network] = [];
-        }
-        itemsByState[item.state][item.network].push({...item, index});
-    });
-    
-    let html = '';
-    Object.keys(itemsByState).forEach(state => {
-        html += `<div class="state-group">
-            <div class="state-title">${state}</div>`;
-        
-        Object.keys(itemsByState[state]).forEach(network => {
-            html += `<div class="network-group">
-                <div class="network-title">${network}</div>`;
-            
-            itemsByState[state][network].forEach(item => {
-                html += `<div class="item">
-                    <div class="item-info">
-                        <strong>${item.boxType}</strong> - ${item.store}
-                        <div class="item-details">
-                            Usuário: ${item.user} | Quantidade: ${item.quantity}
-                        </div>
-                    </div>
-                    <button class="remove-btn" onclick="removeDryBoxItem(${item.index})">Remover</button>
-                </div>`;
-            });
-            
-            html += '</div>';
+        let html = '<ul>';
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const date = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleString() : 'N/A';
+            html += `<li><strong>${data.productType}</strong> (${data.boxType}): ${data.quantity} caixas - Loja: ${data.store}, Rede: ${data.network}, Usuário: ${data.user} (${date})</li>`;
         });
-        
-        html += '</div>';
-    });
-    
-    itemsContainer.innerHTML = html;
+        html += '</ul>';
+        itemsDiv.innerHTML = html;
+        document.getElementById('submitInventory').style.display = 'block'; // Mostra o botão se houver itens
+    } catch (error) {
+        console.error("Erro ao carregar itens de inventário:", error);
+        itemsDiv.innerHTML = '<p class="status-error">Erro ao carregar itens.</p>';
+    }
 }
 
-// Funções para remover itens
-function removeInventoryItem(index) {
-    inventoryItems.splice(index, 1);
-    updateInventoryDisplay();
+// Função para exibir os últimos itens adicionados ( Caixas Secas )
+async function loadLatestDryBoxItems() {
+    const itemsDiv = document.getElementById('dryBoxesItems');
+    itemsDiv.innerHTML = 'Carregando itens...';
+    try {
+        const q = query(collection(db, "dryBoxes"), orderBy("timestamp", "desc"), limit(5)); // Pega os últimos 5
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            itemsDiv.innerHTML = '<p>Nenhuma caixa seca adicionada ainda.</p>';
+            return;
+        }
+        let html = '<ul>';
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const date = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleString() : 'N/A';
+            html += `<li><strong>${data.boxType}</strong>: ${data.quantity} caixas - Loja: ${data.store}, Rede: ${data.network}, Usuário: ${data.user} (${date})</li>`;
+        });
+        html += '</ul>';
+        itemsDiv.innerHTML = html;
+        document.getElementById('submitDryBoxes').style.display = 'block'; // Mostra o botão se houver itens
+    } catch (error) {
+        console.error("Erro ao carregar caixas secas:", error);
+        itemsDiv.innerHTML = '<p class="status-error">Erro ao carregar caixas secas.</p>';
+    }
 }
 
-function removeDryBoxItem(index) {
-    dryBoxesItems.splice(index, 1);
-    updateDryBoxesDisplay();
-}
 
-// Função para adicionar à lista de envio
+// Placeholder para a função submitToQueue (você implementará a lógica de envio de email ou notificação aqui)
 function submitToQueue(type) {
-    let items, container;
-    
-    if (type === 'inventory') {
-        if (inventoryItems.length === 0) {
-            showStatus('Nenhum item para adicionar à lista!', 'error');
+    alert(`Funcionalidade de adicionar à fila de envio de ${type} será implementada (ex: enviar email com os dados).`);
+    console.log(`Dados prontos para serem enviados para ${type} (via Cloud Function/Email Service).`);
+    showStatusMessage(`Dados de ${type} adicionados à fila de envio.`, false);
+}
+window.submitToQueue = submitToQueue; // Expor para o HTML
+
+// --- Funções de Countdown ---
+function startCountdown(elementId, targetHour, targetMinute, targetDayOfWeek = null) {
+    const countdownElement = document.getElementById(elementId);
+    if (!countdownElement) return;
+
+    function updateCountdown() {
+        const now = new Date();
+        let targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), targetHour, targetMinute, 0, 0);
+
+        if (targetDayOfWeek !== null) { // Se for para um dia da semana específico
+            let daysUntilTarget = targetDayOfWeek - now.getDay();
+            if (daysUntilTarget < 0 || (daysUntilTarget === 0 && now.getTime() > targetDate.getTime())) {
+                daysUntilTarget += 7; // Próxima semana
+            }
+            targetDate.setDate(now.getDate() + daysUntilTarget);
+            targetDate.setHours(targetHour, targetMinute, 0, 0);
+        }
+
+        // Se o tempo alvo já passou hoje (e não é um dia da semana específico ou já ajustamos para o próximo)
+        if (now.getTime() > targetDate.getTime() && targetDayOfWeek === null) {
+            targetDate.setDate(targetDate.getDate() + 1);
+        }
+
+        const timeLeft = targetDate.getTime() - now.getTime();
+
+        if (timeLeft < 0) {
+            countdownElement.textContent = "Tempo esgotado!";
+            clearInterval(interval);
             return;
         }
-        items = [...inventoryItems];
-        container = 'submitInventory';
-        inventorySubmissionQueue.push({
-            timestamp: new Date(),
-            items: items,
-            user: items[0].user,
-            state: items[0].state,
-            network: items[0].network,
-            store: items[0].store
-        });
-        
-        // Marcar como enviado no status
-        const key = `${items[0].state}-${items[0].network}-${items[0].user}`;
-        submissionStatus.inventory[key] = {
-            user: items[0].user,
-            state: items[0].state,
-            network: items[0].network,
-            store: items[0].store,
-            timestamp: new Date()
-        };
-        
-        inventoryItems = [];
-        updateInventoryDisplay();
-        showStatus('Inventário adicionado à lista de envio!', 'success');
-        
-    } else if (type === 'dryBoxes') {
-        if (dryBoxesItems.length === 0) {
-            showStatus('Nenhuma caixa seca para adicionar à lista!', 'error');
-            return;
+
+        const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+
+        let countdownText = '';
+        if (days > 0) {
+            countdownText += `${days}d `;
         }
-        items = [...dryBoxesItems];
-        container = 'submitDryBoxes';
-        dryBoxesSubmissionQueue.push({
-            timestamp: new Date(),
-            items: items,
-            user: items[0].user,
-            state: items[0].state,
-            network: items[0].network,
-            store: items[0].store
-        });
-        
-        // Marcar como enviado no status
-        const key = `${items[0].state}-${items[0].network}-${items[0].user}`;
-        submissionStatus.dryBoxes[key] = {
-            user: items[0].user,
-            state: items[0].state,
-            network: items[0].network,
-            store: items[0].store,
-            timestamp: new Date()
-        };
-        
-        dryBoxesItems = [];
-        updateDryBoxesDisplay();
-        showStatus('Caixas secas adicionadas à lista de envio!', 'success');
+        countdownText += `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        countdownElement.textContent = countdownText;
     }
-    
-    updateSubmissionStatus();
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
 }
 
-// Função para atualizar status de envios
-function updateSubmissionStatus() {
-    // Status do inventário
-    const inventoryContainer = document.getElementById('inventorySubmissions');
-    const selectedState = document.getElementById('state').value;
-    const selectedNetwork = document.getElementById('network').value;
-    let inventoryHtml = '';
-    
-    if (selectedState && selectedNetwork) {
-        Object.values(submissionStatus.inventory).forEach(submission => {
-            if (submission.state === selectedState && submission.network === selectedNetwork) {
-                inventoryHtml += `<div class="submission-item">
-                    <span class="submitted">✓</span> ${submission.user} da ${submission.network} da ${submission.store} já enviou
-                    <small>(${submission.timestamp.toLocaleString()})</small>
-                </div>`;
-            }
-        });
-        
-        if (inventoryHtml === '') {
-            inventoryHtml = '<p>Nenhum envio registrado para esta rede ainda.</p>';
-        }
-    } else {
-        inventoryHtml = '<p>Selecione estado e rede para ver os envios.</p>';
-    }
-    
-    inventoryContainer.innerHTML = inventoryHtml;
-    
-    // Status das caixas secas
-    const dryBoxesContainer = document.getElementById('dryBoxesSubmissions');
-    const selectedDryState = document.getElementById('dryState').value;
-    const selectedDryNetwork = document.getElementById('dryNetwork').value;
-    let dryBoxesHtml = '';
-    
-    if (selectedDryState && selectedDryNetwork) {
-        Object.values(submissionStatus.dryBoxes).forEach(submission => {
-            if (submission.state === selectedDryState && submission.network === selectedDryNetwork) {
-                dryBoxesHtml += `<div class="submission-item">
-                    <span class="submitted">✓</span> ${submission.user} da ${submission.network} da ${submission.store} já enviou
-                    <small>(${submission.timestamp.toLocaleString()})</small>
-                </div>`;
-            }
-        });
-        
-        if (dryBoxesHtml === '') {
-            dryBoxesHtml = '<p>Nenhum envio registrado para esta rede ainda.</p>';
-        }
-    } else {
-        dryBoxesHtml = '<p>Selecione estado e rede para ver os envios.</p>';
-    }
-    
-    dryBoxesContainer.innerHTML = dryBoxesHtml;
-}
+// --- Lógica da Área de Gestores ---
 
-// Função para atualizar visualização do gestor
-function updateManagerView() {
-    // Exibir dados do inventário
-    updateManagerInventoryView();
-    updateManagerDryBoxesView();
-}
+// Login do gestor (simples, para demonstração)
+const CORRECT_MANAGER_PASSWORD = "admin"; // MUDE ISSO EM PRODUÇÃO! Use Firebase Authentication.
 
-function updateManagerInventoryView() {
-    const container = document.getElementById('managerInventoryData');
-    let html = '';
-    
-    Object.values(submissionStatus.inventory).forEach(submission => {
-        html += `<div class="manager-submission">
-            <strong>${submission.user}</strong> - ${submission.store}
-            <div class="submission-details">
-                Estado: ${submission.state} | Rede: ${submission.network}
-                <br>Enviado em: ${submission.timestamp.toLocaleString()}
-            </div>
-        </div>`;
-    });
-    
-    if (html === '') {
-        html = '<p>Nenhum envio encontrado.</p>';
-    }
-    
-    container.innerHTML = html;
-}
+document.addEventListener('DOMContentLoaded', () => {
+    const managerLoginForm = document.getElementById('managerLoginForm');
+    const managerPasswordInput = document.getElementById('managerPassword');
+    const loginErrorDiv = document.getElementById('loginError');
+    const managerLoginDiv = document.getElementById('managerLogin');
+    const managerAreaDiv = document.getElementById('managerArea');
+    const logoutManagerBtn = document.getElementById('logoutManager');
 
-function updateManagerDryBoxesView() {
-    const container = document.getElementById('managerDryBoxesData');
-    let html = '';
-    
-    Object.values(submissionStatus.dryBoxes).forEach(submission => {
-        html += `<div class="manager-submission">
-            <strong>${submission.user}</strong> - ${submission.store}
-            <div class="submission-details">
-                Estado: ${submission.state} | Rede: ${submission.network}
-                <br>Enviado em: ${submission.timestamp.toLocaleString()}
-            </div>
-        </div>`;
-    });
-    
-    if (html === '') {
-        html = '<p>Nenhum envio encontrado.</p>';
-    }
-    
-    container.innerHTML = html;
-    
-    // Atualizar filas de envio
-    updateManagerQueueViews();
-}
-
-function updateManagerQueueViews() {
-    updateManagerInventoryQueue();
-    updateManagerDryBoxesQueue();
-}
-
-function updateManagerInventoryQueue() {
-    const container = document.getElementById('managerInventoryQueue');
-    let html = '';
-    
-    inventorySubmissionQueue.forEach((submission, index) => {
-        html += `<div class="queue-item">
-            <div class="queue-header">
-                <div class="queue-user-info">
-                    <strong>${submission.user}</strong> - ${submission.store}
-                    <br><small>Estado: ${submission.state} | Rede: ${submission.network}</small>
-                    <br><small>Adicionado em: ${submission.timestamp.toLocaleString()}</small>
-                </div>
-                <div class="queue-actions">
-                    <button class="edit-btn" onclick="editQueueSubmission('inventory', ${index})">Editar</button>
-                    <button class="send-btn" onclick="sendImmediately('inventory', ${index})">Enviar Agora</button>
-                    <button class="delete-btn" onclick="deleteQueueSubmission('inventory', ${index})">Excluir</button>
-                </div>
-            </div>
-            <div class="queue-items-list">
-                <strong>Itens (${submission.items.length}):</strong>
-                ${submission.items.map(item => 
-                    `<div class="queue-item-detail">
-                        ${item.productType} - ${item.boxType} (${item.quantity} Caixas)
-                    </div>`
-                ).join('')}
-            </div>
-        </div>`;
-    });
-    
-    if (html === '') {
-        html = '<p>Nenhum envio pendente de inventário.</p>';
-    }
-    
-    container.innerHTML = html;
-}
-
-function updateManagerDryBoxesQueue() {
-    const container = document.getElementById('managerDryBoxesQueue');
-    let html = '';
-    
-    dryBoxesSubmissionQueue.forEach((submission, index) => {
-        html += `<div class="queue-item">
-            <div class="queue-header">
-                <div class="queue-user-info">
-                    <strong>${submission.user}</strong> - ${submission.store}
-                    <br><small>Estado: ${submission.state} | Rede: ${submission.network}</small>
-                    <br><small>Adicionado em: ${submission.timestamp.toLocaleString()}</small>
-                </div>
-                <div class="queue-actions">
-                    <button class="edit-btn" onclick="editQueueSubmission('dryBoxes', ${index})">Editar</button>
-                    <button class="send-btn" onclick="sendImmediately('dryBoxes', ${index})">Enviar Agora</button>
-                    <button class="delete-btn" onclick="deleteQueueSubmission('dryBoxes', ${index})">Excluir</button>
-                </div>
-            </div>
-            <div class="queue-items-list">
-                <strong>Itens (${submission.items.length}):</strong>
-                ${submission.items.map(item => 
-                    `<div class="queue-item-detail">
-                        ${item.boxType} (${item.quantity} Caixas)
-                    </div>`
-                ).join('')}
-            </div>
-        </div>`;
-    });
-    
-    if (html === '') {
-        html = '<p>Nenhum envio pendente de caixas secas.</p>';
-    }
-    
-    container.innerHTML = html;
-}
-
-function sendImmediately(type, index) {
-    if (confirm('Tem certeza que deseja enviar este item imediatamente para todos os emails cadastrados?')) {
-        const queue = type === 'inventory' ? inventorySubmissionQueue : dryBoxesSubmissionQueue;
-        const submission = queue[index];
-        
-        // Filtrar emails que devem receber este tipo de envio
-        const relevantEmails = systemConfig.emails.filter(email => {
-            if (type === 'inventory') {
-                return email.inventory;
+    if (managerLoginForm) {
+        managerLoginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (managerPasswordInput.value === CORRECT_MANAGER_PASSWORD) {
+                managerLoginDiv.style.display = 'none';
+                managerAreaDiv.style.display = 'block';
+                loginErrorDiv.style.display = 'none';
+                showManagerTab('pending'); // Carrega a aba de pendências por padrão
             } else {
-                return email.dryBoxes;
+                loginErrorDiv.style.display = 'block';
             }
         });
-        
-        if (relevantEmails.length === 0) {
-            showStatus('Nenhum email configurado para receber este tipo de envio!', 'error');
-            return;
-        }
-        
-        // Simular envio do email
-        console.log(`Enviando ${type === 'inventory' ? 'inventário' : 'caixas secas'} imediatamente para:`, relevantEmails.map(e => e.address));
-        console.log('Dados enviados:', submission);
-        
-        // Remover da lista de pendentes
-        queue.splice(index, 1);
-        updateManagerView();
-        
-        const typeText = type === 'inventory' ? 'inventário' : 'caixas secas';
-        showStatus(`${typeText.charAt(0).toUpperCase() + typeText.slice(1)} enviado imediatamente para ${relevantEmails.length} email(s)!`, 'success');
     }
-}
 
-function deleteQueueSubmission(type, index) {
-    if (confirm('Tem certeza que deseja excluir este envio?')) {
-        if (type === 'inventory') {
-            inventorySubmissionQueue.splice(index, 1);
-        } else {
-            dryBoxesSubmissionQueue.splice(index, 1);
-        }
-        updateManagerView();
-        showStatus('Envio excluído com sucesso!', 'success');
-    }
-}
-
-let currentEditingSubmission = null;
-
-function editQueueSubmission(type, index) {
-    currentEditingSubmission = { type, index };
-    const submission = type === 'inventory' ? inventorySubmissionQueue[index] : dryBoxesSubmissionQueue[index];
-    
-    showEditModal(submission, type);
-}
-
-function showEditModal(submission, type) {
-    const modal = document.getElementById('editModal') || createEditModal();
-    const modalContent = modal.querySelector('.modal-content');
-    
-    const title = type === 'inventory' ? 'Inventário Diário' : 'Caixas Secas';
-    
-    modalContent.innerHTML = `
-        <div class="modal-header">
-            <h3>Editar Envio - ${title}</h3>
-            <button class="close-modal" onclick="closeEditModal()">Fechar</button>
-        </div>
-        <div class="modal-body">
-            <div class="form-group">
-                <label>Usuário: <strong>${submission.user}</strong></label>
-            </div>
-            <div class="form-group">
-                <label>Estado: <strong>${submission.state}</strong></label>
-            </div>
-            <div class="form-group">
-                <label>Rede: <strong>${submission.network}</strong></label>
-            </div>
-            <div class="form-group">
-                <label>Loja: <strong>${submission.store}</strong></label>
-            </div>
-            <div id="editableItems">
-                <h4>Itens:</h4>
-                ${generateEditableItems(submission.items, type)}
-            </div>
-            <button onclick="addNewEditableItem('${type}')">Adicionar Item</button>
-        </div>
-        <div class="modal-footer" style="text-align: right; margin-top: 20px;">
-            <button onclick="closeEditModal()" style="background-color: #6c757d;">Cancelar</button>
-            <button onclick="saveEditedSubmission()" style="background-color: #28a745;">Salvar Alterações</button>
-        </div>
-    `;
-    
-    modal.style.display = 'block';
-}
-
-function generateEditableItems(items, type) {
-    return items.map((item, index) => {
-        if (type === 'inventory') {
-            return `<div class="editable-item" data-index="${index}">
-                <button class="item-remove-btn" onclick="removeEditableItem(${index})">Remover</button>
-                <div class="form-group">
-                    <label>Tipo do Produto:</label>
-                    <input type="text" name="productType" value="${item.productType}" required>
-                </div>
-                <div class="form-group">
-                    <label>Tipo de Caixa:</label>
-                    <select name="boxType" required>
-                        <option value="Pequena" ${item.boxType === 'Pequena' ? 'selected' : ''}>Pequena</option>
-                        <option value="Média" ${item.boxType === 'Média' ? 'selected' : ''}>Média</option>
-                        <option value="Grande" ${item.boxType === 'Grande' ? 'selected' : ''}>Grande</option>
-                        <option value="Extra Grande" ${item.boxType === 'Extra Grande' ? 'selected' : ''}>Extra Grande</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Quantidade:</label>
-                    <input type="number" name="quantity" value="${item.quantity}" min="0" required>
-                </div>
-            </div>`;
-        } else {
-            return `<div class="editable-item" data-index="${index}">
-                <button class="item-remove-btn" onclick="removeEditableItem(${index})">Remover</button>
-                <div class="form-group">
-                    <label>Tipo de Caixa Seca:</label>
-                    <select name="boxType" required>
-                        <option value="Caixa Seca Pequena" ${item.boxType === 'Caixa Seca Pequena' ? 'selected' : ''}>Caixa Seca Pequena</option>
-                        <option value="Caixa Seca Média" ${item.boxType === 'Caixa Seca Média' ? 'selected' : ''}>Caixa Seca Média</option>
-                        <option value="Caixa Seca Grande" ${item.boxType === 'Caixa Seca Grande' ? 'selected' : ''}>Caixa Seca Grande</option>
-                        <option value="Caixa Seca Extra Grande" ${item.boxType === 'Caixa Seca Extra Grande' ? 'selected' : ''}>Caixa Seca Extra Grande</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Quantidade:</label>
-                    <input type="number" name="quantity" value="${item.quantity}" min="0" required>
-                </div>
-            </div>`;
-        }
-    }).join('');
-}
-
-function addNewEditableItem(type) {
-    const container = document.getElementById('editableItems');
-    const itemsCount = container.querySelectorAll('.editable-item').length;
-    
-    let newItemHtml = '';
-    if (type === 'inventory') {
-        newItemHtml = `<div class="editable-item" data-index="${itemsCount}">
-            <button class="item-remove-btn" onclick="removeEditableItem(${itemsCount})">Remover</button>
-            <div class="form-group">
-                <label>Tipo do Produto:</label>
-                <input type="text" name="productType" required>
-            </div>
-            <div class="form-group">
-                <label>Tipo de Caixa:</label>
-                <select name="boxType" required>
-                    <option value="">Selecione o tipo de caixa</option>
-                    <option value="Pequena">Pequena</option>
-                    <option value="Média">Média</option>
-                    <option value="Grande">Grande</option>
-                    <option value="Extra Grande">Extra Grande</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Quantidade:</label>
-                <input type="number" name="quantity" min="0" required>
-            </div>
-        </div>`;
-    } else {
-        newItemHtml = `<div class="editable-item" data-index="${itemsCount}">
-            <button class="item-remove-btn" onclick="removeEditableItem(${itemsCount})">Remover</button>
-            <div class="form-group">
-                <label>Tipo de Caixa Seca:</label>
-                <select name="boxType" required>
-                    <option value="">Selecione o tipo de caixa</option>
-                    <option value="Caixa Seca Pequena">Caixa Seca Pequena</option>
-                    <option value="Caixa Seca Média">Caixa Seca Média</option>
-                    <option value="Caixa Seca Grande">Caixa Seca Grande</option>
-                    <option value="Caixa Seca Extra Grande">Caixa Seca Extra Grande</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Quantidade:</label>
-                <input type="number" name="quantity" min="0" required>
-            </div>
-        </div>`;
-    }
-    
-    container.insertAdjacentHTML('beforeend', newItemHtml);
-}
-
-function removeEditableItem(index) {
-    const item = document.querySelector(`[data-index="${index}"]`);
-    if (item) {
-        item.remove();
-    }
-}
-
-function saveEditedSubmission() {
-    if (!currentEditingSubmission) return;
-    
-    const { type, index } = currentEditingSubmission;
-    const editableItems = document.querySelectorAll('.editable-item');
-    
-    const updatedItems = [];
-    editableItems.forEach(itemDiv => {
-        const inputs = itemDiv.querySelectorAll('input, select');
-        const item = {};
-        
-        inputs.forEach(input => {
-            if (input.name === 'quantity') {
-                item[input.name] = parseInt(input.value);
-            } else {
-                item[input.name] = input.value;
-            }
+    if (logoutManagerBtn) {
+        logoutManagerBtn.addEventListener('click', () => {
+            managerAreaDiv.style.display = 'none';
+            managerLoginDiv.style.display = 'block';
+            managerPasswordInput.value = '';
+            loginErrorDiv.style.display = 'none';
         });
-        
-        updatedItems.push(item);
-    });
-    
-    if (updatedItems.length === 0) {
-        alert('Pelo menos um item deve ser mantido.');
+    }
+});
+
+// Funções para carregar dados na área do gestor
+
+async function loadManagerPendingData() {
+    const managerInventoryData = document.getElementById('managerInventoryData');
+    const managerDryBoxesData = document.getElementById('managerDryBoxesData');
+
+    managerInventoryData.innerHTML = 'Carregando dados de inventário pendentes...';
+    managerDryBoxesData.innerHTML = 'Carregando dados de caixas secas pendentes...';
+
+    try {
+        // Exemplo: pegar os últimos 10 envios de inventário
+        const inventoryQuery = query(collection(db, "inventory"), orderBy("timestamp", "desc"), limit(10));
+        const inventorySnapshot = await getDocs(inventoryQuery);
+        displayPendingData(inventorySnapshot, managerInventoryData, 'inventory');
+
+        // Exemplo: pegar os últimos 10 envios de caixas secas
+        const dryBoxesQuery = query(collection(db, "dryBoxes"), orderBy("timestamp", "desc"), limit(10));
+        const dryBoxesSnapshot = await getDocs(dryBoxesQuery);
+        displayPendingData(dryBoxesSnapshot, managerDryBoxesData, 'dryBoxes');
+
+    } catch (error) {
+        console.error("Erro ao carregar dados pendentes do gestor:", error);
+        managerInventoryData.innerHTML = '<p class="status-error">Erro ao carregar dados de inventário.</p>';
+        managerDryBoxesData.innerHTML = '<p class="status-error">Erro ao carregar dados de caixas secas.</p>';
+    }
+}
+
+function displayPendingData(snapshot, containerElement, type) {
+    if (snapshot.empty) {
+        containerElement.innerHTML = `<p>Nenhum envio de ${type} recente.</p>`;
         return;
     }
-    
-    // Atualizar a submission
-    const queue = type === 'inventory' ? inventorySubmissionQueue : dryBoxesSubmissionQueue;
-    queue[index].items = updatedItems;
-    
-    closeEditModal();
-    updateManagerView();
-    showStatus('Envio atualizado com sucesso!', 'success');
-}
-
-function createEditModal() {
-    const modal = document.createElement('div');
-    modal.id = 'editModal';
-    modal.className = 'modal';
-    modal.innerHTML = '<div class="modal-content"></div>';
-    
-    // Fechar modal clicando fora
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            closeEditModal();
+    let html = '<ul class="data-list">';
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        const timestamp = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleString() : 'N/A';
+        if (type === 'inventory') {
+            html += `<li><strong>${data.productType} (${data.boxType})</strong>: ${data.quantity} caixas - Loja: ${data.store}, Usuário: ${data.user} (${timestamp})</li>`;
+        } else if (type === 'dryBoxes') {
+            html += `<li><strong>${data.boxType}</strong>: ${data.quantity} caixas - Loja: ${data.store}, Usuário: ${data.user} (${timestamp})</li>`;
         }
     });
-    
-    document.body.appendChild(modal);
-    return modal;
+    html += '</ul>';
+    containerElement.innerHTML = html;
 }
 
-function closeEditModal() {
-    const modal = document.getElementById('editModal');
-    if (modal) {
-        modal.style.display = 'none';
+
+// --- Funções de Carregamento de Dropdowns (Configurações e Dados) ---
+
+// Popula os dropdowns de estado na aba de configurações e dados
+async function loadStatesForConfigDropdowns() {
+    // Para "Novo Usuário"
+    populateSelect('newUserState', allStates, 'Selecione um estado');
+    // Para "Filtrar por Estado" (usuários)
+    populateSelect('userStateFilter', [{id: '', name: 'Todos os estados'}].concat(allStates), 'Todos os estados');
+    // Para "Filtrar por Estado" (redes)
+    populateSelect('networkStateFilter', [{id: '', name: 'Selecione um estado'}].concat(allStates), 'Selecione um estado');
+    // Para "Tipo de Dados"
+    populateSelect('dataState', [{id: '', name: 'Todos os estados'}].concat(allStates), 'Todos os estados');
+}
+
+async function loadStatesForDataViewDropdown() {
+    populateSelect('dataState', [{id: '', name: 'Todos os estados'}].concat(allStates), 'Todos os estados');
+}
+
+async function loadNetworksForDataView() {
+    const selectedStateName = document.getElementById('dataState').value;
+    const selectedState = allStates.find(s => s.name === selectedStateName);
+    
+    let filteredNetworks = [];
+    if (selectedState) {
+        filteredNetworks = allNetworks.filter(n => n.stateId === selectedState.id);
     }
-    currentEditingSubmission = null;
+    populateSelect('dataNetwork', [{id: '', name: 'Todas as redes'}].concat(filteredNetworks), 'Todas as redes');
+    loadDataView();
 }
 
-// Funções de contagem regressiva
-function updateCountdowns() {
-    updateInventoryCountdown();
-    updateDryBoxesCountdown();
-}
 
-function updateInventoryCountdown() {
-    const now = new Date();
-    const [hours, minutes] = systemConfig.inventoryTime.split(':').map(Number);
-    
-    // Encontrar próximo dia configurado
-    const currentDay = now.getDay();
-    let nextTargetDay = null;
-    let daysUntilTarget = 7; // Máximo de uma semana
-    
-    // Verificar se hoje é um dia configurado e ainda não passou do horário
-    if (systemConfig.inventoryDays.includes(currentDay)) {
-        const todayTarget = new Date(now);
-        todayTarget.setHours(hours, minutes, 0, 0);
+// --- Funções de Configurações (CRUD no Firestore) ---
+
+// Horários de Envio
+async function saveScheduleSettings() {
+    const inventoryDays = Array.from(document.querySelectorAll('#managerConfigTab #inventoryDay0, #inventoryDay1, #inventoryDay2, #inventoryDay3, #inventoryDay4, #inventoryDay5, #inventoryDay6:checked'))
+                               .map(cb => parseInt(cb.value));
+    const inventoryTime = document.getElementById('inventoryTime').value;
+
+    const dryBoxesDays = Array.from(document.querySelectorAll('#managerConfigTab #dryBoxesDay0, #dryBoxesDay1, #dryBoxesDay2, #dryBoxesDay3, #dryBoxesDay4, #dryBoxesDay5, #dryBoxesDay6:checked'))
+                               .map(cb => parseInt(cb.value));
+    const dryBoxesTime = document.getElementById('dryBoxesTime').value;
+
+    currentSchedule = {
+        inventory: { days: inventoryDays, time: inventoryTime },
+        dryBoxes: { days: dryBoxesDays, time: dryBoxesTime }
+    };
+
+    try {
+        const configDocRef = doc(db, "configs", "appConfig");
+        await setDoc(configDocRef, { schedule: currentSchedule }, { merge: true });
+        showStatusMessage("Horários de envio salvos com sucesso!");
+        // Reinicia os contadores com os novos horários
+        const [invHour, invMin] = inventoryTime.split(':').map(Number);
+        startCountdown('inventoryCountdown', invHour, invMin);
         
-        if (now.getTime() < todayTarget.getTime()) {
-            nextTargetDay = currentDay;
-            daysUntilTarget = 0;
+        // Para caixas secas, se for para a próxima segunda-feira (dia 1)
+        const [dryHour, dryMin] = dryBoxesTime.split(':').map(Number);
+        if (dryBoxesDays.includes(1)) { // Assumindo que você quer "próxima segunda" se segunda estiver selecionada
+             startCountdown('dryBoxesCountdown', dryHour, dryMin, 1); 
+        } else {
+             startCountdown('dryBoxesCountdown', dryHour, dryMin); // Comportamento padrão
         }
-    }
-    
-    // Se não encontrou hoje, procurar próximo dia
-    if (nextTargetDay === null) {
-        for (let i = 1; i <= 7; i++) {
-            const checkDay = (currentDay + i) % 7;
-            if (systemConfig.inventoryDays.includes(checkDay)) {
-                nextTargetDay = checkDay;
-                daysUntilTarget = i;
-                break;
-            }
-        }
-    }
-    
-    const target = new Date(now);
-    target.setDate(now.getDate() + daysUntilTarget);
-    target.setHours(hours, minutes, 0, 0);
-    
-    const timeDiff = target - now;
-    const remainingHours = Math.floor(timeDiff / (1000 * 60 * 60));
-    const remainingMinutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-    const remainingSeconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
-    
-    const countdownElement = document.getElementById('inventoryCountdown');
-    countdownElement.innerHTML = `${remainingHours.toString().padStart(2, '0')}:${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
 
-function updateDryBoxesCountdown() {
-    const now = new Date();
-    const [hours, minutes] = systemConfig.dryBoxesTime.split(':').map(Number);
-    
-    // Encontrar próximo dia configurado
-    const currentDay = now.getDay();
-    let nextTargetDay = null;
-    let daysUntilTarget = 7; // Máximo de uma semana
-    
-    // Verificar se hoje é um dia configurado e ainda não passou do horário
-    if (systemConfig.dryBoxesDays.includes(currentDay)) {
-        const todayTarget = new Date(now);
-        todayTarget.setHours(hours, minutes, 0, 0);
-        
-        if (now.getTime() < todayTarget.getTime()) {
-            nextTargetDay = currentDay;
-            daysUntilTarget = 0;
-        }
+    } catch (error) {
+        console.error("Erro ao salvar horários:", error);
+        showStatusMessage("Erro ao salvar horários.", true);
     }
-    
-    // Se não encontrou hoje, procurar próximo dia
-    if (nextTargetDay === null) {
-        for (let i = 1; i <= 7; i++) {
-            const checkDay = (currentDay + i) % 7;
-            if (systemConfig.dryBoxesDays.includes(checkDay)) {
-                nextTargetDay = checkDay;
-                daysUntilTarget = i;
-                break;
-            }
-        }
-    }
-    
-    const target = new Date(now);
-    target.setDate(now.getDate() + daysUntilTarget);
-    target.setHours(hours, minutes, 0, 0);
-    
-    const timeDiff = target - now;
-    const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
-    const remainingHours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const remainingMinutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-    const remainingSeconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
-    
-    const countdownElement = document.getElementById('dryBoxesCountdown');
-    countdownElement.innerHTML = `${days}d ${remainingHours.toString().padStart(2, '0')}:${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
+window.saveScheduleSettings = saveScheduleSettings;
 
-// Função para envio automático
-function processAutomaticSubmissions() {
-    const now = new Date();
-    const [inventoryHours, inventoryMinutes] = systemConfig.inventoryTime.split(':').map(Number);
-    const [dryBoxesHours, dryBoxesMinutes] = systemConfig.dryBoxesTime.split(':').map(Number);
-    const currentDay = now.getDay();
-    
-    // Verificar envio de inventário (dias e horário configurados)
-    if (systemConfig.inventoryDays.includes(currentDay) && 
-        now.getHours() === inventoryHours && 
-        now.getMinutes() === inventoryMinutes) {
-        if (inventorySubmissionQueue.length > 0) {
-            console.log('Enviando inventários automaticamente para:', systemConfig.emails);
-            console.log('Dados do inventário:', inventorySubmissionQueue);
-            inventorySubmissionQueue = [];
-            showStatus('Inventários enviados automaticamente!', 'success');
-        }
+function applyScheduleSettingsToUI() {
+    if (currentSchedule.inventory) {
+        currentSchedule.inventory.days.forEach(day => {
+            const cb = document.getElementById(`inventoryDay${day}`);
+            if (cb) cb.checked = true;
+        });
+        document.getElementById('inventoryTime').value = currentSchedule.inventory.time;
     }
-    
-    // Verificar envio de caixas secas (dias e horário configurados)
-    if (systemConfig.dryBoxesDays.includes(currentDay) && 
-        now.getHours() === dryBoxesHours && 
-        now.getMinutes() === dryBoxesMinutes) {
-        if (dryBoxesSubmissionQueue.length > 0) {
-            console.log('Enviando caixas secas automaticamente para:', systemConfig.emails);
-            console.log('Dados das caixas secas:', dryBoxesSubmissionQueue);
-            dryBoxesSubmissionQueue = [];
-            showStatus('Caixas secas enviadas automaticamente!', 'success');
-        }
+    if (currentSchedule.dryBoxes) {
+        currentSchedule.dryBoxes.days.forEach(day => {
+            const cb = document.getElementById(`dryBoxesDay${day}`);
+            if (cb) cb.checked = true;
+        });
+        document.getElementById('dryBoxesTime').value = currentSchedule.dryBoxes.time;
     }
 }
 
-// Função para mostrar status
-function showStatus(message, type) {
-    const statusDiv = document.getElementById('status');
-    statusDiv.textContent = message;
-    statusDiv.className = type;
-    
-    if (message) {
-        setTimeout(() => {
-            statusDiv.textContent = '';
-            statusDiv.className = '';
-        }, 3000);
-    }
-}
 
-// Funções de autenticação do gestor
-function checkManagerAuthentication() {
-    const loginDiv = document.getElementById('managerLogin');
-    const managerArea = document.getElementById('managerArea');
-    
-    if (managerAuthenticated) {
-        loginDiv.style.display = 'none';
-        managerArea.style.display = 'block';
-        updateManagerView();
-    } else {
-        loginDiv.style.display = 'block';
-        managerArea.style.display = 'none';
-    }
-}
-
-function authenticateManager(password) {
-    if (password === MANAGER_PASSWORD) {
-        managerAuthenticated = true;
-        document.getElementById('loginError').style.display = 'none';
-        checkManagerAuthentication();
-        showStatus('Login realizado com sucesso!', 'success');
-        return true;
-    } else {
-        document.getElementById('loginError').style.display = 'block';
-        showStatus('Senha incorreta!', 'error');
-        return false;
-    }
-}
-
-function logoutManager() {
-    managerAuthenticated = false;
-    document.getElementById('managerPassword').value = '';
-    document.getElementById('loginError').style.display = 'none';
-    checkManagerAuthentication();
-    showStatus('Logout realizado com sucesso!', 'success');
-}
-
-// Event listeners para login/logout
-document.getElementById('managerLoginForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const password = document.getElementById('managerPassword').value;
-    authenticateManager(password);
-});
-
-document.getElementById('logoutManager').addEventListener('click', function() {
-    logoutManager();
-});
-
-// Funções de configuração
-function initializeConfigurationData() {
-    // Inicializar horários
-    document.getElementById('inventoryTime').value = systemConfig.inventoryTime;
-    document.getElementById('dryBoxesTime').value = systemConfig.dryBoxesTime;
-    
-    // Inicializar dias do inventário
-    for (let i = 0; i <= 6; i++) {
-        const checkbox = document.getElementById(`inventoryDay${i}`);
-        if (checkbox) {
-            checkbox.checked = systemConfig.inventoryDays.includes(i);
-        }
-    }
-    
-    // Inicializar dias das caixas secas
-    for (let i = 0; i <= 6; i++) {
-        const checkbox = document.getElementById(`dryBoxesDay${i}`);
-        if (checkbox) {
-            checkbox.checked = systemConfig.dryBoxesDays.includes(i);
-        }
-    }
-    
-    // Iniciar com listas escondidas
-    hideAllUsers();
-    hideAllStates();
-    hideAllNetworks();
-    hideAllStores();
-    updateEmailsList();
-    updateConfigSelects();
-}
-
-function updateConfigSelects() {
-    // Atualizar select de estados para novo usuário
+// Gerenciar Usuários
+async function addUser() {
+    const newUserInput = document.getElementById('newUser');
     const newUserStateSelect = document.getElementById('newUserState');
-    if (newUserStateSelect) {
-        newUserStateSelect.innerHTML = '<option value="">Selecione um estado</option>';
-        Object.keys(networksByState).forEach(state => {
-            const option = document.createElement('option');
-            option.value = state;
-            option.textContent = state;
-            newUserStateSelect.appendChild(option);
-        });
-    }
-    
-    // Atualizar select de estados para filtro de usuários
-    const userStateSelect = document.getElementById('userState');
-    if (userStateSelect) {
-        userStateSelect.innerHTML = '<option value="">Todos os estados</option>';
-        Object.keys(networksByState).forEach(state => {
-            const option = document.createElement('option');
-            option.value = state;
-            option.textContent = state;
-            userStateSelect.appendChild(option);
-        });
-    }
-    
-    // Atualizar select de estados para redes
-    const networkStateSelect = document.getElementById('networkState');
-    networkStateSelect.innerHTML = '<option value="">Selecione um estado</option>';
-    Object.keys(networksByState).forEach(state => {
-        const option = document.createElement('option');
-        option.value = state;
-        option.textContent = state;
-        networkStateSelect.appendChild(option);
-    });
-    
-    // Atualizar select de redes para lojas
-    const storeNetworkSelect = document.getElementById('storeNetwork');
-    storeNetworkSelect.innerHTML = '<option value="">Selecione uma rede</option>';
-    Object.keys(storesByNetwork).forEach(network => {
-        const option = document.createElement('option');
-        option.value = network;
-        option.textContent = network;
-        storeNetworkSelect.appendChild(option);
-    });
-}
+    const userName = newUserInput.value.trim();
+    const stateName = newUserStateSelect.value;
+    const state = allStates.find(s => s.name === stateName);
 
-function saveScheduleSettings() {
-    systemConfig.inventoryTime = document.getElementById('inventoryTime').value;
-    systemConfig.dryBoxesTime = document.getElementById('dryBoxesTime').value;
-    
-    // Coletar dias selecionados para inventário
-    systemConfig.inventoryDays = [];
-    for (let i = 0; i <= 6; i++) {
-        const checkbox = document.getElementById(`inventoryDay${i}`);
-        if (checkbox && checkbox.checked) {
-            systemConfig.inventoryDays.push(i);
+    if (userName && state) {
+        try {
+            await addDoc(collection(db, "users"), { name: userName, stateId: state.id });
+            newUserInput.value = '';
+            showStatusMessage(`Usuário "${userName}" adicionado ao estado "${stateName}".`);
+            await loadMasterData(); // Recarregar dados mestres para atualizar todas as listas
+            loadUsersInConfig(); // Recarregar a lista de usuários na config
+            loadNetworksAndUsersForInventory(); // Atualizar dropdowns nos formulários
+            loadNetworksAndUsersForDryBoxes();
+        } catch (error) {
+            console.error("Erro ao adicionar usuário:", error);
+            showStatusMessage("Erro ao adicionar usuário.", true);
         }
-    }
-    
-    // Coletar dias selecionados para caixas secas
-    systemConfig.dryBoxesDays = [];
-    for (let i = 0; i <= 6; i++) {
-        const checkbox = document.getElementById(`dryBoxesDay${i}`);
-        if (checkbox && checkbox.checked) {
-            systemConfig.dryBoxesDays.push(i);
-        }
-    }
-    
-    if (systemConfig.inventoryDays.length === 0) {
-        showStatus('Selecione pelo menos um dia para o inventário!', 'error');
-        return;
-    }
-    
-    if (systemConfig.dryBoxesDays.length === 0) {
-        showStatus('Selecione pelo menos um dia para as caixas secas!', 'error');
-        return;
-    }
-    
-    showStatus('Configurações de horário salvas com sucesso!', 'success');
-}
-
-// Gerenciar usuários
-function addUser() {
-    const selectedState = document.getElementById('newUserState').value;
-    const newUser = document.getElementById('newUser').value.trim();
-    
-    if (!selectedState) {
-        showStatus('Selecione um estado primeiro!', 'error');
-        return;
-    }
-    
-    if (!newUser) {
-        showStatus('Digite um nome válido!', 'error');
-        return;
-    }
-    
-    // Verificar se usuário já existe no estado
-    if (systemConfig.usersByState[selectedState] && systemConfig.usersByState[selectedState].includes(newUser)) {
-        showStatus('Usuário já existe neste estado!', 'error');
-        return;
-    }
-    
-    // Verificar se usuário já existe em outro estado
-    for (const state in systemConfig.usersByState) {
-        if (systemConfig.usersByState[state].includes(newUser)) {
-            showStatus(`Usuário já existe no estado: ${state}!`, 'error');
-            return;
-        }
-    }
-    
-    if (!systemConfig.usersByState[selectedState]) {
-        systemConfig.usersByState[selectedState] = [];
-    }
-    
-    systemConfig.usersByState[selectedState].push(newUser);
-    updateUsersList();
-    updateUserSelects();
-    document.getElementById('newUser').value = '';
-    document.getElementById('newUserState').value = '';
-    showStatus('Usuário adicionado com sucesso!', 'success');
-}
-
-function removeUser(username, state) {
-    if (confirm(`Tem certeza que deseja remover o usuário "${username}" do estado "${state}"?`)) {
-        if (systemConfig.usersByState[state]) {
-            systemConfig.usersByState[state] = systemConfig.usersByState[state].filter(user => user !== username);
-        }
-        updateUsersList();
-        updateUserSelects();
-        showStatus('Usuário removido com sucesso!', 'success');
-    }
-}
-
-function updateUsersList() {
-    const container = document.getElementById('usersList');
-    let html = '';
-    
-    Object.keys(systemConfig.usersByState).forEach(state => {
-        if (systemConfig.usersByState[state].length > 0) {
-            html += `
-                <div class="list-item state-header">
-                    <span>${state}</span>
-                </div>
-            `;
-            
-            systemConfig.usersByState[state].forEach(user => {
-                html += `
-                    <div class="list-item network-item">
-                        <label class="item-checkbox">
-                            <input type="checkbox" data-username="${user}" data-state="${state}">
-                            <span>${user}</span>
-                        </label>
-                        <button onclick="removeUser('${user}', '${state}')">Remover</button>
-                    </div>
-                `;
-            });
-        }
-    });
-    
-    if (html === '') {
-        html = '<p>Nenhum usuário cadastrado ainda.</p>';
-    }
-    
-    container.innerHTML = html;
-}
-
-function updateUserSelects() {
-    // Atualizar select de usuários baseado no estado selecionado
-    const stateSelect = document.getElementById('state');
-    const dryStateSelect = document.getElementById('dryState');
-    
-    if (stateSelect && stateSelect.value) {
-        updateUsersByState();
-    }
-    
-    if (dryStateSelect && dryStateSelect.value) {
-        updateDryUsersByState();
-    }
-}
-
-// Gerenciar estados
-function addState() {
-    const newState = document.getElementById('newState').value.trim();
-    if (newState && !networksByState[newState]) {
-        networksByState[newState] = [];
-        updateStatesList();
-        document.getElementById('newState').value = '';
-        showStatus('Estado adicionado com sucesso!', 'success');
-    } else if (networksByState[newState]) {
-        showStatus('Estado já existe!', 'error');
     } else {
-        showStatus('Digite um nome válido!', 'error');
+        showStatusMessage("Por favor, insira um nome de usuário e selecione um estado.", true);
     }
 }
+window.addUser = addUser;
 
-function removeState(stateName) {
-    if (confirm(`Tem certeza que deseja remover o estado "${stateName}" e todas suas redes?`)) {
-        // Remover todas as redes associadas ao estado
-        if (networksByState[stateName]) {
-            networksByState[stateName].forEach(network => {
-                delete storesByNetwork[network];
-            });
-        }
-        
-        delete networksByState[stateName];
-        updateStatesList();
-        showStatus('Estado removido com sucesso!', 'success');
-    }
-}
-
-function updateStatesList() {
-    const container = document.getElementById('statesList');
-    let html = '';
-    
-    Object.keys(networksByState).forEach(state => {
-        html += `
-            <div class="list-item state-header">
-                <label class="item-checkbox">
-                    <input type="checkbox" data-state="${state}">
-                    <span>${state}</span>
-                </label>
-                <button onclick="removeState('${state}')">Remover</button>
-            </div>
-        `;
-    });
-    
-    container.innerHTML = html;
-    
-    // Atualizar selects de estados nos formulários principais
-    updateStateSelects();
-}
-
-function updateStateSelects() {
-    const stateSelects = ['state', 'dryState', 'managerState'];
-    stateSelects.forEach(selectId => {
-        const select = document.getElementById(selectId);
-        if (select) {
-            const currentValue = select.value;
-            select.innerHTML = '<option value="">Selecione um estado</option>';
-            
-            Object.keys(networksByState).forEach(state => {
-                const option = document.createElement('option');
-                option.value = state;
-                option.textContent = state;
-                if (state === currentValue) option.selected = true;
-                select.appendChild(option);
-            });
-        }
-    });
-}
-
-// Gerenciar redes
-function addNetwork() {
-    const selectedState = document.getElementById('networkState').value;
-    const newNetwork = document.getElementById('newNetwork').value.trim();
-    
-    if (!selectedState) {
-        showStatus('Selecione um estado primeiro!', 'error');
-        return;
-    }
-    
-    if (!networksByState[selectedState]) {
-        showStatus('Estado selecionado não existe!', 'error');
-        return;
-    }
-    
-    if (newNetwork && !networksByState[selectedState].includes(newNetwork)) {
-        networksByState[selectedState].push(newNetwork);
-        storesByNetwork[newNetwork] = [];
-        updateNetworksList();
-        document.getElementById('newNetwork').value = '';
-        showStatus('Rede adicionada com sucesso!', 'success');
-    } else if (networksByState[selectedState].includes(newNetwork)) {
-        showStatus('Rede já existe neste estado!', 'error');
-    } else {
-        showStatus('Digite um nome válido!', 'error');
-    }
-}
-
-function removeNetwork(networkName) {
-    if (confirm(`Tem certeza que deseja remover a rede "${networkName}" e todas suas lojas?`)) {
-        // Remover das redes por estado
-        Object.keys(networksByState).forEach(state => {
-            networksByState[state] = networksByState[state].filter(network => network !== networkName);
-        });
-        
-        // Remover das lojas por rede
-        delete storesByNetwork[networkName];
-        
-        updateNetworksList();
-        updateConfigSelects();
-        showStatus('Rede removida com sucesso!', 'success');
-    }
-}
-
-function updateNetworksList() {
-    const container = document.getElementById('networksList');
-    let html = '';
-    
-    Object.keys(networksByState).forEach(state => {
-        if (networksByState[state].length > 0) {
-            html += `
-                <div class="list-item state-header">
-                    <span>${state}</span>
-                </div>
-            `;
-            
-            networksByState[state].forEach(network => {
-                html += `
-                    <div class="list-item network-item">
-                        <label class="item-checkbox">
-                            <input type="checkbox" data-network="${network}">
-                            <span>${network}</span>
-                        </label>
-                        <button onclick="removeNetwork('${network}')">Remover</button>
-                    </div>
-                `;
-            });
-        }
-    });
-    
-    container.innerHTML = html;
-    updateConfigSelects();
-}
-
-// Gerenciar lojas
-function addStore() {
-    const selectedNetwork = document.getElementById('storeNetwork').value;
-    const newStore = document.getElementById('newStore').value.trim();
-    
-    if (!selectedNetwork) {
-        showStatus('Selecione uma rede primeiro!', 'error');
-        return;
-    }
-    
-    if (!storesByNetwork[selectedNetwork]) {
-        showStatus('Rede selecionada não existe!', 'error');
-        return;
-    }
-    
-    if (newStore && !storesByNetwork[selectedNetwork].includes(newStore)) {
-        storesByNetwork[selectedNetwork].push(newStore);
-        updateStoresList();
-        document.getElementById('newStore').value = '';
-        showStatus('Loja adicionada com sucesso!', 'success');
-    } else if (storesByNetwork[selectedNetwork].includes(newStore)) {
-        showStatus('Loja já existe nesta rede!', 'error');
-    } else {
-        showStatus('Digite um nome válido!', 'error');
-    }
-}
-
-function removeStore(storeName) {
-    if (confirm(`Tem certeza que deseja remover a loja "${storeName}"?`)) {
-        Object.keys(storesByNetwork).forEach(network => {
-            storesByNetwork[network] = storesByNetwork[network].filter(store => store !== storeName);
-        });
-        
-        updateStoresList();
-        showStatus('Loja removida com sucesso!', 'success');
-    }
-}
-
-function updateStoresList() {
-    const container = document.getElementById('storesList');
-    let html = '';
-    
-    Object.keys(storesByNetwork).forEach(network => {
-        if (storesByNetwork[network].length > 0) {
-            html += `
-                <div class="list-item network-header">
-                    <span>${network}</span>
-                </div>
-            `;
-            
-            storesByNetwork[network].forEach(store => {
-                html += `
-                    <div class="list-item store-item">
-                        <label class="item-checkbox">
-                            <input type="checkbox" data-store="${store}">
-                            <span>${store}</span>
-                        </label>
-                        <button onclick="removeStore('${store}')">Remover</button>
-                    </div>
-                `;
-            });
-        }
-    });
-    
-    container.innerHTML = html;
-    updateStoreSelects();
-}
-
-function updateStoreSelects() {
-    const storeSelects = ['store', 'dryStore'];
-    storeSelects.forEach(selectId => {
-        const select = document.getElementById(selectId);
-        if (select) {
-            const currentValue = select.value;
-            const currentNetwork = selectId === 'store' ? 
-                document.getElementById('network').value : 
-                document.getElementById('dryNetwork').value;
-                
-            select.innerHTML = '<option value="">Selecione uma loja</option>';
-            
-            if (currentNetwork && storesByNetwork[currentNetwork]) {
-                storesByNetwork[currentNetwork].forEach(store => {
-                    const option = document.createElement('option');
-                    option.value = store;
-                    option.textContent = store;
-                    if (store === currentValue) option.selected = true;
-                    select.appendChild(option);
-                });
-            }
-        }
-    });
-}
-
-// Gerenciar emails
-function addEmail() {
-    const newEmail = document.getElementById('newEmail').value.trim();
-    const emailExists = systemConfig.emails.some(email => email.address === newEmail);
-    
-    // Validar formato do email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    
-    if (!newEmail) {
-        showStatus('Digite um email!', 'error');
-        return;
-    }
-    
-    if (!emailRegex.test(newEmail)) {
-        showStatus('Formato de email inválido!', 'error');
-        return;
-    }
-    
-    if (emailExists) {
-        showStatus('Email já existe!', 'error');
-        return;
-    }
-    
-    systemConfig.emails.push({
-        address: newEmail,
-        inventory: true,
-        dryBoxes: true
-    });
-    updateEmailsList();
-    document.getElementById('newEmail').value = '';
-    showStatus('Email adicionado com sucesso!', 'success');
-}
-
-function removeEmail(emailAddress) {
-    if (confirm(`Tem certeza que deseja remover o email "${emailAddress}"?`)) {
-        systemConfig.emails = systemConfig.emails.filter(e => e.address !== emailAddress);
-        updateEmailsList();
-        showStatus('Email removido com sucesso!', 'success');
-    }
-}
-
-function updateEmailsList() {
-    const container = document.getElementById('emailsList');
-    let html = '';
-    
-    systemConfig.emails.forEach((email, index) => {
-        html += `
-            <div class="email-item">
-                <div class="email-info">
-                    <label class="item-checkbox">
-                        <input type="checkbox" data-email="${email.address}">
-                        <span class="email-address">${email.address}</span>
-                    </label>
-                    <div class="email-options">
-                        <label class="email-checkbox">
-                            <input type="checkbox" ${email.inventory ? 'checked' : ''} 
-                                   onchange="updateEmailSetting(${index}, 'inventory', this.checked)">
-                            Inventário
-                        </label>
-                        <label class="email-checkbox">
-                            <input type="checkbox" ${email.dryBoxes ? 'checked' : ''} 
-                                   onchange="updateEmailSetting(${index}, 'dryBoxes', this.checked)">
-                            Caixas Secas
-                        </label>
-                        <label class="email-checkbox">
-                            <input type="checkbox" ${email.inventory && email.dryBoxes ? 'checked' : ''} 
-                                   onchange="updateEmailSetting(${index}, 'all', this.checked)">
-                            Tudo
-                        </label>
-                    </div>
-                </div>
-                <button onclick="removeEmail('${email.address}')">Remover</button>
-            </div>
-        `;
-    });
-    
-    container.innerHTML = html;
-}
-
-function updateEmailSetting(index, setting, checked) {
-    if (setting === 'all') {
-        systemConfig.emails[index].inventory = checked;
-        systemConfig.emails[index].dryBoxes = checked;
-    } else {
-        systemConfig.emails[index][setting] = checked;
-    }
-    
-    // Se desmarcar inventário ou caixas secas, desmarcar "tudo" também
-    if (!checked && setting !== 'all') {
-        const email = systemConfig.emails[index];
-        if (!email.inventory || !email.dryBoxes) {
-            // Atualizar a visualização
-            updateEmailsList();
-            return;
-        }
-    }
-    
-    updateEmailsList();
-    showStatus('Configuração de email atualizada!', 'success');
-}
-
-// Funções de busca para usuários
-function searchUsers() {
+async function loadUsersInConfig() {
+    const usersListDiv = document.getElementById('usersList');
+    usersListDiv.innerHTML = 'Carregando usuários...';
+    const filterStateName = document.getElementById('userStateFilter').value;
     const searchTerm = document.getElementById('searchUser').value.toLowerCase();
-    const container = document.getElementById('usersList');
-    
-    if (searchTerm === '') {
-        updateUsersList();
+
+    let filteredUsers = allUsers;
+    if (filterStateName) {
+        const state = allStates.find(s => s.name === filterStateName);
+        if (state) {
+            filteredUsers = filteredUsers.filter(u => u.stateId === state.id);
+        }
+    }
+    if (searchTerm) {
+        filteredUsers = filteredUsers.filter(u => u.name.toLowerCase().includes(searchTerm));
+    }
+
+    if (filteredUsers.length === 0) {
+        usersListDiv.innerHTML = '<p>Nenhum usuário encontrado.</p>';
         return;
     }
-    
-    let html = '';
-    let foundAny = false;
-    
-    Object.keys(systemConfig.usersByState).forEach(state => {
-        const filteredUsers = systemConfig.usersByState[state].filter(user => 
-            user.toLowerCase().includes(searchTerm)
-        );
-        
-        if (filteredUsers.length > 0) {
-            foundAny = true;
-            html += `
-                <div class="list-item state-header">
-                    <span>${state}</span>
-                </div>
-            `;
-            
-            filteredUsers.forEach(user => {
-                html += `
-                    <div class="list-item network-item">
-                        <span>${user}</span>
-                        <button onclick="removeUser('${user}', '${state}')">Remover</button>
-                    </div>
-                `;
-            });
-        }
+
+    let html = '<ul class="config-list">';
+    filteredUsers.forEach(user => {
+        const userState = allStates.find(s => s.id === user.stateId)?.name || 'Desconhecido';
+        html += `<li>
+                    <input type="checkbox" data-id="${user.id}">
+                    <span>${user.name} (${userState})</span>
+                 </li>`;
     });
-    
-    if (!foundAny) {
-        html = '<p>Nenhum usuário encontrado.</p>';
-    }
-    
-    container.innerHTML = html;
+    html += '</ul>';
+    usersListDiv.innerHTML = html;
 }
+window.loadUsersInConfig = loadUsersInConfig;
 
-function showAllUsers() {
-    document.getElementById('searchUser').value = '';
-    updateUsersList();
+function selectAllUsers() {
+    document.querySelectorAll('#usersList input[type="checkbox"]').forEach(cb => cb.checked = true);
 }
+window.selectAllUsers = selectAllUsers;
 
-// Funções de busca para estados
-function searchStates() {
-    const searchTerm = document.getElementById('searchState').value.toLowerCase();
-    const container = document.getElementById('statesList');
-    
-    if (searchTerm === '') {
-        updateStatesList();
+function deselectAllUsers() {
+    document.querySelectorAll('#usersList input[type="checkbox"]').forEach(cb => cb.checked = false);
+}
+window.deselectAllUsers = deselectAllUsers;
+
+async function removeSelectedUsers() {
+    const selectedUserIds = Array.from(document.querySelectorAll('#usersList input[type="checkbox"]:checked'))
+                               .map(cb => cb.dataset.id);
+    if (selectedUserIds.length === 0) {
+        showStatusMessage("Selecione os usuários para remover.", true);
         return;
     }
-    
-    const filteredStates = Object.keys(networksByState).filter(state => 
-        state.toLowerCase().includes(searchTerm)
-    );
-    
-    let html = '';
-    filteredStates.forEach(state => {
-        html += `
-            <div class="list-item state-header">
-                <span>${state}</span>
-                <button onclick="removeState('${state}')">Remover</button>
-            </div>
-        `;
-    });
-    
-    if (html === '') {
-        html = '<p>Nenhum estado encontrado.</p>';
-    }
-    
-    container.innerHTML = html;
-}
 
-function showAllStates() {
-    document.getElementById('searchState').value = '';
-    updateStatesList();
-}
-
-// Funções de busca para redes
-function searchNetworks() {
-    const searchTerm = document.getElementById('searchNetwork').value.toLowerCase();
-    const container = document.getElementById('networksList');
-    
-    if (searchTerm === '') {
-        updateNetworksList();
+    if (!confirm(`Tem certeza que deseja remover ${selectedUserIds.length} usuário(s)?`)) {
         return;
     }
-    
-    let html = '';
-    let foundAny = false;
-    
-    Object.keys(networksByState).forEach(state => {
-        const filteredNetworks = networksByState[state].filter(network => 
-            network.toLowerCase().includes(searchTerm)
-        );
-        
-        if (filteredNetworks.length > 0) {
-            foundAny = true;
-            html += `
-                <div class="list-item state-header">
-                    <span>${state}</span>
-                </div>
-            `;
-            
-            filteredNetworks.forEach(network => {
-                html += `
-                    <div class="list-item network-item">
-                        <span>${network}</span>
-                        <button onclick="removeNetwork('${network}')">Remover</button>
-                    </div>
-                `;
-            });
-        }
-    });
-    
-    if (!foundAny) {
-        html = '<p>Nenhuma rede encontrada.</p>';
+
+    try {
+        const deletePromises = selectedUserIds.map(id => deleteDoc(doc(db, "users", id)));
+        await Promise.all(deletePromises);
+        showStatusMessage(`${selectedUserIds.length} usuário(s) removido(s) com sucesso.`);
+        await loadMasterData();
+        loadUsersInConfig();
+        loadNetworksAndUsersForInventory();
+        loadNetworksAndUsersForDryBoxes();
+    } catch (error) {
+        console.error("Erro ao remover usuários:", error);
+        showStatusMessage("Erro ao remover usuários.", true);
     }
-    
-    container.innerHTML = html;
 }
+window.removeSelectedUsers = removeSelectedUsers;
 
-function showAllNetworks() {
-    document.getElementById('searchNetwork').value = '';
-    updateNetworksList();
+function searchUsers() {
+    loadUsersInConfig(); // Recarrega a lista com o termo de busca
 }
+window.searchUsers = searchUsers;
 
-// Funções de busca para lojas
-function searchStores() {
-    const searchTerm = document.getElementById('searchStore').value.toLowerCase();
-    const container = document.getElementById('storesList');
-    
-    if (searchTerm === '') {
-        updateStoresList();
-        return;
-    }
-    
-    let html = '';
-    let foundAny = false;
-    
-    Object.keys(storesByNetwork).forEach(network => {
-        const filteredStores = storesByNetwork[network].filter(store => 
-            store.toLowerCase().includes(searchTerm)
-        );
-        
-        if (filteredStores.length > 0) {
-            foundAny = true;
-            html += `
-                <div class="list-item network-header">
-                    <span>${network}</span>
-                </div>
-            `;
-            
-            filteredStores.forEach(store => {
-                html += `
-                    <div class="list-item store-item">
-                        <span>${store}</span>
-                        <button onclick="removeStore('${store}')">Remover</button>
-                    </div>
-                `;
-            });
-        }
-    });
-    
-    if (!foundAny) {
-        html = '<p>Nenhuma loja encontrada.</p>';
-    }
-    
-    container.innerHTML = html;
-}
+// Gerenciar Estados
+async function addState() {
+    const newStateInput = document.getElementById('newState');
+    const stateName = newStateInput.value.trim();
 
-function showAllStores() {
-    document.getElementById('searchStore').value = '';
-    updateStoresList();
-}
-
-// Funções para usuários pendentes
-function updatePendingView() {
-    pendingViewState = { level: 'states', selectedState: null, selectedNetwork: null };
-    showPendingStates();
-}
-
-function showPendingStates() {
-    const type = document.getElementById('pendingType').value;
-    
-    // Resetar navegação
-    pendingViewState = { level: 'states', selectedState: null, selectedNetwork: null };
-    document.getElementById('backToPendingStates').style.display = 'none';
-    document.getElementById('backToPendingNetworks').style.display = 'none';
-    
-    // Mostrar apenas a view de estados
-    document.getElementById('pendingStatesView').style.display = 'block';
-    document.getElementById('pendingNetworksView').style.display = 'none';
-    document.getElementById('pendingUsersView').style.display = 'none';
-    
-    const container = document.getElementById('pendingStatesList');
-    let html = '';
-    
-    Object.keys(networksByState).forEach(state => {
-        const pendingCount = getPendingUsersCountByState(state, type);
-        if (pendingCount > 0) {
-            html += `
-                <div class="pending-item" onclick="showPendingNetworks('${state}')">
-                    <span class="pending-name">${state}</span>
-                    <span class="pending-count">${pendingCount} usuários ainda não enviaram</span>
-                    <span class="pending-arrow">→</span>
-                </div>
-            `;
-        }
-    });
-    
-    if (html === '') {
-        html = '<p>Todos os usuários já enviaram!</p>';
-    }
-    
-    container.innerHTML = html;
-}
-
-function showPendingNetworks(stateName) {
-    if (typeof stateName === 'undefined' && pendingViewState.selectedState) {
-        stateName = pendingViewState.selectedState;
-    }
-    
-    const type = document.getElementById('pendingType').value;
-    
-    pendingViewState.level = 'networks';
-    pendingViewState.selectedState = stateName;
-    
-    // Atualizar navegação
-    document.getElementById('backToPendingStates').style.display = 'inline-block';
-    document.getElementById('backToPendingNetworks').style.display = 'none';
-    
-    // Mostrar apenas a view de redes
-    document.getElementById('pendingStatesView').style.display = 'none';
-    document.getElementById('pendingNetworksView').style.display = 'block';
-    document.getElementById('pendingUsersView').style.display = 'none';
-    
-    document.getElementById('pendingNetworksTitle').textContent = `Redes em ${stateName}`;
-    
-    const container = document.getElementById('pendingNetworksList');
-    let html = '';
-    
-    if (networksByState[stateName]) {
-        networksByState[stateName].forEach(network => {
-            const pendingCount = getPendingUsersCountByNetwork(stateName, network, type);
-            if (pendingCount > 0) {
-                html += `
-                    <div class="pending-item" onclick="showPendingUsers('${stateName}', '${network}')">
-                        <span class="pending-name">${network}</span>
-                        <span class="pending-count">${pendingCount} usuários ainda não enviaram</span>
-                        <span class="pending-arrow">→</span>
-                    </div>
-                `;
+    if (stateName) {
+        try {
+            // Verificar se o estado já existe para evitar duplicatas
+            const existingStates = allStates.filter(s => s.name.toLowerCase() === stateName.toLowerCase());
+            if (existingStates.length > 0) {
+                showStatusMessage(`O estado "${stateName}" já existe.`, true);
+                return;
             }
-        });
-    }
-    
-    if (html === '') {
-        html = '<p>Todos os usuários desta rede já enviaram!</p>';
-    }
-    
-    container.innerHTML = html;
-}
-
-function showPendingNetworksOriginal(stateName) {
-    const type = document.getElementById('pendingType').value;
-    
-    pendingViewState.level = 'networks';
-    pendingViewState.selectedState = stateName;
-    
-    // Atualizar navegação
-    document.getElementById('backToPendingStates').style.display = 'inline-block';
-    document.getElementById('backToPendingNetworks').style.display = 'none';
-    
-    // Mostrar apenas a view de redes
-    document.getElementById('pendingStatesView').style.display = 'none';
-    document.getElementById('pendingNetworksView').style.display = 'block';
-    document.getElementById('pendingUsersView').style.display = 'none';
-    
-    document.getElementById('pendingNetworksTitle').textContent = `Redes em ${stateName}`;
-    
-    const container = document.getElementById('pendingNetworksList');
-    let html = '';
-    
-    if (networksByState[stateName]) {
-        networksByState[stateName].forEach(network => {
-            const pendingCount = getPendingUsersCountByNetwork(stateName, network, type);
-            if (pendingCount > 0) {
-                html += `
-                    <div class="pending-item" onclick="showPendingUsers('${stateName}', '${network}')">
-                        <span class="pending-name">${network}</span>
-                        <span class="pending-count">${pendingCount} usuários ainda não enviaram</span>
-                        <span class="pending-arrow">→</span>
-                    </div>
-                `;
-            }
-        });
-    }
-    
-    if (html === '') {
-        html = '<p>Todos os usuários desta rede já enviaram!</p>';
-    }
-    
-    container.innerHTML = html;
-}
-
-function showPendingUsers(stateName, networkName) {
-    const type = document.getElementById('pendingType').value;
-    
-    pendingViewState.level = 'users';
-    pendingViewState.selectedState = stateName;
-    pendingViewState.selectedNetwork = networkName;
-    
-    // Atualizar navegação
-    document.getElementById('backToPendingStates').style.display = 'inline-block';
-    document.getElementById('backToPendingNetworks').style.display = 'inline-block';
-    
-    // Mostrar apenas a view de usuários
-    document.getElementById('pendingStatesView').style.display = 'none';
-    document.getElementById('pendingNetworksView').style.display = 'none';
-    document.getElementById('pendingUsersView').style.display = 'block';
-    
-    document.getElementById('pendingUsersTitle').textContent = `Usuários pendentes em ${networkName} - ${stateName}`;
-    
-    const container = document.getElementById('pendingUsersList');
-    const pendingUsers = getPendingUsersByNetwork(stateName, networkName, type);
-    
-    let html = '';
-    
-    if (pendingUsers.length > 0) {
-        pendingUsers.forEach(user => {
-            html += `
-                <div class="pending-user-item">
-                    <span class="pending-user-name">${user}</span>
-                    <span class="pending-user-status">Não enviou</span>
-                </div>
-            `;
-        });
+            await addDoc(collection(db, "states"), { name: stateName });
+            newStateInput.value = '';
+            showStatusMessage(`Estado "${stateName}" adicionado com sucesso.`);
+            await loadMasterData();
+            loadStatesInConfig();
+            loadStatesForConfigDropdowns(); // Atualiza dropdowns de config
+            loadStatesForForms(); // Atualiza dropdowns dos formulários de entrada
+            loadStatesForDataViewDropdown(); // Atualiza dropdown de filtro de dados
+        } catch (error) {
+            console.error("Erro ao adicionar estado:", error);
+            showStatusMessage("Erro ao adicionar estado.", true);
+        }
     } else {
-        html = '<p>Todos os usuários desta rede já enviaram!</p>';
+        showStatusMessage("Por favor, insira um nome para o estado.", true);
     }
-    
-    container.innerHTML = html;
 }
+window.addState = addState;
 
-function getPendingUsersCountByState(state, type) {
-    const submittedUsers = new Set();
-    const submissions = type === 'inventory' ? submissionStatus.inventory : submissionStatus.dryBoxes;
-    
-    Object.values(submissions).forEach(submission => {
-        if (submission.state === state) {
-            submittedUsers.add(submission.user);
-        }
+async function loadStatesInConfig() {
+    const statesListDiv = document.getElementById('statesList');
+    statesListDiv.innerHTML = 'Carregando estados...';
+    const searchTerm = document.getElementById('searchState').value.toLowerCase();
+
+    let filteredStates = allStates;
+    if (searchTerm) {
+        filteredStates = filteredStates.filter(s => s.name.toLowerCase().includes(searchTerm));
+    }
+
+    if (filteredStates.length === 0) {
+        statesListDiv.innerHTML = '<p>Nenhum estado encontrado.</p>';
+        return;
+    }
+
+    let html = '<ul class="config-list">';
+    filteredStates.forEach(state => {
+        html += `<li>
+                    <input type="checkbox" data-id="${state.id}">
+                    <span>${state.name}</span>
+                 </li>`;
     });
-    
-    // Contar usuários do estado que poderiam enviar
-    const usersInState = systemConfig.usersByState[state] ? systemConfig.usersByState[state].length : 0;
-    let totalUsersInState = 0;
-    if (networksByState[state]) {
-        networksByState[state].forEach(network => {
-            if (storesByNetwork[network]) {
-                totalUsersInState += usersInState * storesByNetwork[network].length;
+    html += '</ul>';
+    statesListDiv.innerHTML = html;
+}
+window.loadStatesInConfig = loadStatesInConfig;
+
+function selectAllStates() {
+    document.querySelectorAll('#statesList input[type="checkbox"]').forEach(cb => cb.checked = true);
+}
+window.selectAllStates = selectAllStates;
+
+function deselectAllStates() {
+    document.querySelectorAll('#statesList input[type="checkbox"]').forEach(cb => cb.checked = false);
+}
+window.deselectAllStates = deselectAllStates;
+
+async function removeSelectedStates() {
+    const selectedStateIds = Array.from(document.querySelectorAll('#statesList input[type="checkbox"]:checked'))
+                               .map(cb => cb.dataset.id);
+    if (selectedStateIds.length === 0) {
+        showStatusMessage("Selecione os estados para remover.", true);
+        return;
+    }
+
+    if (!confirm(`Tem certeza que deseja remover ${selectedStateIds.length} estado(s)? Isso removerá também redes, lojas e usuários associados a esses estados!`)) {
+        return;
+    }
+
+    try {
+        const deletePromises = selectedStateIds.map(async id => {
+            // Remover redes, lojas e usuários associados a este estado
+            const networksToDelete = allNetworks.filter(n => n.stateId === id);
+            const storesToDelete = allStores.filter(s => networksToDelete.some(n => n.id === s.networkId));
+            const usersToDelete = allUsers.filter(u => u.stateId === id);
+
+            const networkDeletePromises = networksToDelete.map(n => deleteDoc(doc(db, "networks", n.id)));
+            const storeDeletePromises = storesToDelete.map(s => deleteDoc(doc(db, "stores", s.id)));
+            const userDeletePromises = usersToDelete.map(u => deleteDoc(doc(db, "users", u.id)));
+
+            await Promise.all([...networkDeletePromises, ...storeDeletePromises, ...userDeletePromises]);
+            return deleteDoc(doc(db, "states", id)); // Finalmente, remover o estado
+        });
+        await Promise.all(deletePromises);
+        showStatusMessage(`${selectedStateIds.length} estado(s) e seus dados associados removido(s) com sucesso.`);
+        await loadMasterData();
+        loadStatesInConfig();
+        loadStatesForConfigDropdowns();
+        loadStatesForForms();
+        loadStatesForDataViewDropdown();
+    } catch (error) {
+        console.error("Erro ao remover estados:", error);
+        showStatusMessage("Erro ao remover estados. Verifique o console.", true);
+    }
+}
+window.removeSelectedStates = removeSelectedStates;
+
+function searchStates() {
+    loadStatesInConfig();
+}
+window.searchStates = searchStates;
+
+
+// Gerenciar Redes
+async function addNetwork() {
+    const newNetworkInput = document.getElementById('newNetwork');
+    const networkStateSelect = document.getElementById('networkStateFilter'); // Use o filtro para pegar o estado
+    const networkName = newNetworkInput.value.trim();
+    const stateName = networkStateSelect.value;
+    const state = allStates.find(s => s.name === stateName);
+
+    if (networkName && state) {
+        try {
+            const existingNetworks = allNetworks.filter(n => n.name.toLowerCase() === networkName.toLowerCase() && n.stateId === state.id);
+            if (existingNetworks.length > 0) {
+                showStatusMessage(`A rede "${networkName}" já existe neste estado.`, true);
+                return;
             }
-        });
-    }
-    
-    return Math.max(0, totalUsersInState - submittedUsers.size);
-}
-
-function getPendingUsersCountByNetwork(state, network, type) {
-    const submittedUsers = new Set();
-    const submissions = type === 'inventory' ? submissionStatus.inventory : submissionStatus.dryBoxes;
-    
-    Object.values(submissions).forEach(submission => {
-        if (submission.state === state && submission.network === network) {
-            submittedUsers.add(submission.user);
+            await addDoc(collection(db, "networks"), { name: networkName, stateId: state.id });
+            newNetworkInput.value = '';
+            showStatusMessage(`Rede "${networkName}" adicionada ao estado "${stateName}".`);
+            await loadMasterData();
+            loadNetworksInConfig();
+            loadNetworksAndUsersForInventory();
+            loadNetworksAndUsersForDryBoxes();
+            loadNetworksForDataView();
+        } catch (error) {
+            console.error("Erro ao adicionar rede:", error);
+            showStatusMessage("Erro ao adicionar rede.", true);
         }
-    });
-    
-    // Contar usuários do estado que poderiam enviar nesta rede
-    const usersInState = systemConfig.usersByState[state] ? systemConfig.usersByState[state].length : 0;
-    const storesCount = storesByNetwork[network] ? storesByNetwork[network].length : 0;
-    const totalUsersInNetwork = usersInState * storesCount;
-    
-    return Math.max(0, totalUsersInNetwork - submittedUsers.size);
+    } else {
+        showStatusMessage("Por favor, insira um nome de rede e selecione um estado.", true);
+    }
 }
+window.addNetwork = addNetwork;
 
-function getPendingUsersByNetwork(state, network, type) {
-    const submittedUsers = new Set();
-    const submissions = type === 'inventory' ? submissionStatus.inventory : submissionStatus.dryBoxes;
-    
-    Object.values(submissions).forEach(submission => {
-        if (submission.state === state && submission.network === network) {
-            submittedUsers.add(submission.user);
+async function loadNetworksInConfig() {
+    const networksListDiv = document.getElementById('networksList');
+    networksListDiv.innerHTML = 'Carregando redes...';
+    const filterStateName = document.getElementById('networkStateFilter').value;
+    const searchTerm = document.getElementById('searchNetwork').value.toLowerCase();
+
+    let filteredNetworks = allNetworks;
+    if (filterStateName) {
+        const state = allStates.find(s => s.name === filterStateName);
+        if (state) {
+            filteredNetworks = filteredNetworks.filter(n => n.stateId === state.id);
         }
+    }
+    if (searchTerm) {
+        filteredNetworks = filteredNetworks.filter(n => n.name.toLowerCase().includes(searchTerm));
+    }
+
+    if (filteredNetworks.length === 0) {
+        networksListDiv.innerHTML = '<p>Nenhuma rede encontrada.</p>';
+        return;
+    }
+
+    let html = '<ul class="config-list">';
+    filteredNetworks.forEach(network => {
+        const networkState = allStates.find(s => s.id === network.stateId)?.name || 'Desconhecido';
+        html += `<li>
+                    <input type="checkbox" data-id="${network.id}">
+                    <span>${network.name} (${networkState})</span>
+                 </li>`;
     });
-    
-    // Retornar usuários do estado que ainda não enviaram
-    const usersInState = systemConfig.usersByState[state] || [];
-    return usersInState.filter(user => !submittedUsers.has(user));
+    html += '</ul>';
+    networksListDiv.innerHTML = html;
+    populateSelect('storeNetworkFilter', [{id: '', name: 'Selecione uma rede'}].concat(filteredNetworks), 'Selecione uma rede');
 }
+window.loadNetworksInConfig = loadNetworksInConfig;
 
-// Funções para visualização de dados organizados
-function initializeDataView() {
-    // Inicializar select de estados para dados
-    const dataStateSelect = document.getElementById('dataState');
-    if (dataStateSelect) {
-        dataStateSelect.innerHTML = '<option value="">Todos os estados</option>';
-        Object.keys(networksByState).forEach(state => {
-            const option = document.createElement('option');
-            option.value = state;
-            option.textContent = state;
-            dataStateSelect.appendChild(option);
+function selectAllNetworks() {
+    document.querySelectorAll('#networksList input[type="checkbox"]').forEach(cb => cb.checked = true);
+}
+window.selectAllNetworks = selectAllNetworks;
+
+function deselectAllNetworks() {
+    document.querySelectorAll('#networksList input[type="checkbox"]').forEach(cb => cb.checked = false);
+}
+window.deselectAllNetworks = deselectAllNetworks;
+
+async function removeSelectedNetworks() {
+    const selectedNetworkIds = Array.from(document.querySelectorAll('#networksList input[type="checkbox"]:checked'))
+                                .map(cb => cb.dataset.id);
+    if (selectedNetworkIds.length === 0) {
+        showStatusMessage("Selecione as redes para remover.", true);
+        return;
+    }
+
+    if (!confirm(`Tem certeza que deseja remover ${selectedNetworkIds.length} rede(s)? Isso removerá também as lojas associadas a essas redes!`)) {
+        return;
+    }
+
+    try {
+        const deletePromises = selectedNetworkIds.map(async id => {
+            // Remover lojas associadas a esta rede
+            const storesToDelete = allStores.filter(s => s.networkId === id);
+            const storeDeletePromises = storesToDelete.map(s => deleteDoc(doc(db, "stores", s.id)));
+            await Promise.all(storeDeletePromises);
+            return deleteDoc(doc(db, "networks", id)); // Finalmente, remover a rede
         });
+        await Promise.all(deletePromises);
+        showStatusMessage(`${selectedNetworkIds.length} rede(s) e suas lojas associadas removida(s) com sucesso.`);
+        await loadMasterData();
+        loadNetworksInConfig();
+        loadNetworksAndUsersForInventory();
+        loadNetworksAndUsersForDryBoxes();
+        loadNetworksForDataView();
+        loadStoresInConfig();
+    } catch (error) {
+        console.error("Erro ao remover redes:", error);
+        showStatusMessage("Erro ao remover redes. Verifique o console.", true);
     }
 }
+window.removeSelectedNetworks = removeSelectedNetworks;
 
-function updateDataNetworks() {
-    const stateSelect = document.getElementById('dataState');
-    const networkSelect = document.getElementById('dataNetwork');
-    const selectedState = stateSelect.value;
-    
-    networkSelect.innerHTML = '<option value="">Todas as redes</option>';
-    
-    if (selectedState && networksByState[selectedState]) {
-        networksByState[selectedState].forEach(network => {
-            const option = document.createElement('option');
-            option.value = network;
-            option.textContent = network;
-            networkSelect.appendChild(option);
-        });
+function searchNetworks() {
+    loadNetworksInConfig();
+}
+window.searchNetworks = searchNetworks;
+
+// Gerenciar Lojas
+async function addStore() {
+    const newStoreInput = document.getElementById('newStore');
+    const storeNetworkSelect = document.getElementById('storeNetworkFilter');
+    const storeName = newStoreInput.value.trim();
+    const networkName = storeNetworkSelect.value;
+    const network = allNetworks.find(n => n.name === networkName);
+
+    if (storeName && network) {
+        try {
+            const existingStores = allStores.filter(s => s.name.toLowerCase() === storeName.toLowerCase() && s.networkId === network.id);
+            if (existingStores.length > 0) {
+                showStatusMessage(`A loja "${storeName}" já existe nesta rede.`, true);
+                return;
+            }
+            await addDoc(collection(db, "stores"), { name: storeName, networkId: network.id });
+            newStoreInput.value = '';
+            showStatusMessage(`Loja "${storeName}" adicionada à rede "${networkName}".`);
+            await loadMasterData();
+            loadStoresInConfig();
+            loadStoresForInventory();
+            loadStoresForDryBoxes();
+        } catch (error) {
+            console.error("Erro ao adicionar loja:", error);
+            showStatusMessage("Erro ao adicionar loja.", true);
+        }
+    } else {
+        showStatusMessage("Por favor, insira um nome de loja e selecione uma rede.", true);
     }
 }
+window.addStore = addStore;
 
-function updateDataView() {
-    dataViewState = { level: 'states', selectedState: null, selectedNetwork: null };
-    showDataStates();
+async function loadStoresInConfig() {
+    const storesListDiv = document.getElementById('storesList');
+    storesListDiv.innerHTML = 'Carregando lojas...';
+    const filterNetworkName = document.getElementById('storeNetworkFilter').value;
+    const searchTerm = document.getElementById('searchStore').value.toLowerCase();
+
+    let filteredStores = allStores;
+    if (filterNetworkName) {
+        const network = allNetworks.find(n => n.name === filterNetworkName);
+        if (network) {
+            filteredStores = filteredStores.filter(s => s.networkId === network.id);
+        }
+    }
+    if (searchTerm) {
+        filteredStores = filteredStores.filter(s => s.name.toLowerCase().includes(searchTerm));
+    }
+
+    if (filteredStores.length === 0) {
+        storesListDiv.innerHTML = '<p>Nenhuma loja encontrada.</p>';
+        return;
+    }
+
+    let html = '<ul class="config-list">';
+    filteredStores.forEach(store => {
+        const storeNetwork = allNetworks.find(n => n.id === store.networkId)?.name || 'Desconhecida';
+        html += `<li>
+                    <input type="checkbox" data-id="${store.id}">
+                    <span>${store.name} (${storeNetwork})</span>
+                 </li>`;
+    });
+    html += '</ul>';
+    storesListDiv.innerHTML = html;
 }
+window.loadStoresInConfig = loadStoresInConfig;
 
-function showDataStates() {
-    const type = document.getElementById('dataType').value;
-    const stateFilter = document.getElementById('dataState').value;
-    const networkFilter = document.getElementById('dataNetwork').value;
-    
-    // Resetar navegação
-    dataViewState = { level: 'states', selectedState: null, selectedNetwork: null };
+function selectAllStores() {
+    document.querySelectorAll('#storesList input[type="checkbox"]').forEach(cb => cb.checked = true);
+}
+window.selectAllStores = selectAllStores;
+
+function deselectAllStores() {
+    document.querySelectorAll('#storesList input[type="checkbox"]').forEach(cb => cb.checked = false);
+}
+window.deselectAllStores = deselectAllStores;
+
+async function removeSelectedStores() {
+    const selectedStoreIds = Array.from(document.querySelectorAll('#storesList input[type="checkbox"]:checked'))
+                                .map(cb => cb.dataset.id);
+    if (selectedStoreIds.length === 0) {
+        showStatusMessage("Selecione as lojas para remover.", true);
+        return;
+    }
+
+    if (!confirm(`Tem certeza que deseja remover ${selectedStoreIds.length} loja(s)?`)) {
+        return;
+    }
+
+    try {
+        const deletePromises = selectedStoreIds.map(id => deleteDoc(doc(db, "stores", id)));
+        await Promise.all(deletePromises);
+        showStatusMessage(`${selectedStoreIds.length} loja(s) removida(s) com sucesso.`);
+        await loadMasterData();
+        loadStoresInConfig();
+        loadStoresForInventory();
+        loadStoresForDryBoxes();
+    } catch (error) {
+        console.error("Erro ao remover lojas:", error);
+        showStatusMessage("Erro ao remover lojas.", true);
+    }
+}
+window.removeSelectedStores = removeSelectedStores;
+
+function searchStores() {
+    loadStoresInConfig();
+}
+window.searchStores = searchStores;
+
+// Gerenciar Emails
+async function addEmail() {
+    const newEmailInput = document.getElementById('newEmail');
+    const email = newEmailInput.value.trim();
+
+    if (email && !allEmails.includes(email)) {
+        try {
+            allEmails.push(email);
+            const configDocRef = doc(db, "configs", "appConfig");
+            await setDoc(configDocRef, { emails: allEmails }, { merge: true });
+            newEmailInput.value = '';
+            showStatusMessage(`Email "${email}" adicionado com sucesso.`);
+            loadEmailsInConfig();
+        } catch (error) {
+            console.error("Erro ao adicionar email:", error);
+            showStatusMessage("Erro ao adicionar email.", true);
+        }
+    } else if (allEmails.includes(email)) {
+        showStatusMessage("Este email já está na lista.", true);
+    } else {
+        showStatusMessage("Por favor, insira um email válido.", true);
+    }
+}
+window.addEmail = addEmail;
+
+async function loadEmailsInConfig() {
+    const emailsListDiv = document.getElementById('emailsList');
+    emailsListDiv.innerHTML = 'Carregando emails...';
+
+    if (allEmails.length === 0) {
+        emailsListDiv.innerHTML = '<p>Nenhum email cadastrado.</p>';
+        return;
+    }
+
+    let html = '<ul class="config-list">';
+    allEmails.forEach(email => {
+        html += `<li>
+                    <input type="checkbox" data-email="${email}">
+                    <span>${email}</span>
+                 </li>`;
+    });
+    html += '</ul>';
+    emailsListDiv.innerHTML = html;
+}
+window.loadEmailsInConfig = loadEmailsInConfig;
+
+function selectAllEmails() {
+    document.querySelectorAll('#emailsList input[type="checkbox"]').forEach(cb => cb.checked = true);
+}
+window.selectAllEmails = selectAllEmails;
+
+function deselectAllEmails() {
+    document.querySelectorAll('#emailsList input[type="checkbox"]').forEach(cb => cb.checked = false);
+}
+window.deselectAllEmails = deselectAllEmails;
+
+async function removeSelectedEmails() {
+    const selectedEmails = Array.from(document.querySelectorAll('#emailsList input[type="checkbox"]:checked'))
+                               .map(cb => cb.dataset.email);
+    if (selectedEmails.length === 0) {
+        showStatusMessage("Selecione os emails para remover.", true);
+        return;
+    }
+
+    if (!confirm(`Tem certeza que deseja remover ${selectedEmails.length} email(s)?`)) {
+        return;
+    }
+
+    try {
+        allEmails = allEmails.filter(email => !selectedEmails.includes(email));
+        const configDocRef = doc(db, "configs", "appConfig");
+        await setDoc(configDocRef, { emails: allEmails }, { merge: true });
+        showStatusMessage(`${selectedEmails.length} email(s) removido(s) com sucesso.`);
+        loadEmailsInConfig();
+    } catch (error) {
+        console.error("Erro ao remover emails:", error);
+        showStatusMessage("Erro ao remover emails.", true);
+    }
+}
+window.removeSelectedEmails = removeSelectedEmails;
+
+
+// Salvar todas as configurações (um wrapper para chamar todas as funções de salvamento de config)
+async function saveAllConfigurations() {
+    showStatusMessage("Salvando todas as configurações...", false);
+    try {
+        await saveScheduleSettings();
+        // Não é necessário chamar os adds/removes aqui, eles já salvam automaticamente
+        // Apenas recarregar as listas para garantir que estão atualizadas
+        await loadMasterData();
+        loadUsersInConfig();
+        loadStatesInConfig();
+        loadNetworksInConfig();
+        loadStoresInConfig();
+        loadEmailsInConfig();
+        showStatusMessage("Todas as configurações salvas e atualizadas com sucesso!");
+    } catch (error) {
+        console.error("Erro ao salvar todas as configurações:", error);
+        showStatusMessage("Erro ao salvar todas as configurações.", true);
+    }
+}
+window.saveAllConfigurations = saveAllConfigurations;
+
+
+// --- Funções de Visualização de Dados (Gestores) ---
+
+async function loadDataView() {
+    const dataType = document.getElementById('dataType').value;
+    const dataStateName = document.getElementById('dataState').value;
+    const dataNetworkName = document.getElementById('dataNetwork').value;
+
+    const dataStatesView = document.getElementById('dataStatesView');
+    const dataNetworksView = document.getElementById('dataNetworksView');
+    const dataDetailsView = document.getElementById('dataDetailsView');
+    const dataStatesList = document.getElementById('dataStatesList');
+    const dataNetworksList = document.getElementById('dataNetworksList');
+    const dataDetailsList = document.getElementById('dataDetailsList');
+
+    // Esconde tudo e mostra apenas o que for relevante
+    dataStatesView.style.display = 'block';
+    dataNetworksView.style.display = 'none';
+    dataDetailsView.style.display = 'none';
     document.getElementById('backToDataStates').style.display = 'none';
     document.getElementById('backToDataNetworks').style.display = 'none';
-    
-    // Mostrar apenas a view de estados
-    document.getElementById('dataStatesView').style.display = 'block';
-    document.getElementById('dataNetworksView').style.display = 'none';
-    document.getElementById('dataDetailsView').style.display = 'none';
-    
-    const container = document.getElementById('dataStatesList');
-    let html = '';
-    
-    const submissions = type === 'inventory' ? submissionStatus.inventory : submissionStatus.dryBoxes;
-    const statesWithData = new Set();
-    
-    Object.values(submissions).forEach(submission => {
-        if (!stateFilter || submission.state === stateFilter) {
-            if (!networkFilter || submission.network === networkFilter) {
-                statesWithData.add(submission.state);
-            }
-        }
-    });
-    
-    statesWithData.forEach(state => {
-        const itemCount = getDataItemsCountByState(state, type, stateFilter, networkFilter);
-        html += `
-            <div class="pending-item" onclick="showDataNetworks('${state}')">
-                <span class="pending-name">${state}</span>
-                <span class="pending-count">${itemCount} registro(s)</span>
-                <span class="pending-arrow">→</span>
-            </div>
-        `;
-    });
-    
-    if (html === '') {
-        html = '<p>Nenhum dado encontrado.</p>';
-    }
-    
-    container.innerHTML = html;
-}
 
-function showDataNetworks(stateName) {
-    if (typeof stateName === 'undefined' && dataViewState.selectedState) {
-        stateName = dataViewState.selectedState;
+    dataStatesList.innerHTML = 'Carregando estados com dados...';
+
+    try {
+        let q = collection(db, dataType);
+        let querySnapshot;
+
+        // Mostrar estados
+        const statesWithData = new Set();
+        const fullSnapshot = await getDocs(q);
+        fullSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.state) statesWithData.add(data.state);
+        });
+
+        if (statesWithData.size === 0) {
+            dataStatesList.innerHTML = '<p>Nenhum dado encontrado para exibir.</p>';
+            return;
+        }
+
+        let html = '<ul class="data-drilldown-list">';
+        Array.from(statesWithData).sort().forEach(stateName => {
+            html += `<li><a href="#" onclick="showDataNetworks('${stateName}')">${stateName}</a></li>`;
+        });
+        html += '</ul>';
+        dataStatesList.innerHTML = html;
+
+    } catch (error) {
+        console.error("Erro ao carregar dados para a visualização:", error);
+        dataStatesList.innerHTML = '<p class="status-error">Erro ao carregar dados.</p>';
     }
-    
-    const type = document.getElementById('dataType').value;
-    const stateFilter = document.getElementById('dataState').value;
-    const networkFilter = document.getElementById('dataNetwork').value;
-    
-    dataViewState.level = 'networks';
-    dataViewState.selectedState = stateName;
-    
-    // Atualizar navegação
-    document.getElementById('backToDataStates').style.display = 'inline-block';
-    document.getElementById('backToDataNetworks').style.display = 'none';
-    
-    // Mostrar apenas a view de redes
+}
+window.loadDataView = loadDataView;
+
+async function showDataNetworks(stateName) {
     document.getElementById('dataStatesView').style.display = 'none';
     document.getElementById('dataNetworksView').style.display = 'block';
     document.getElementById('dataDetailsView').style.display = 'none';
-    
+    document.getElementById('backToDataStates').style.display = 'block';
+    document.getElementById('backToDataNetworks').style.display = 'none';
     document.getElementById('dataNetworksTitle').textContent = `Redes em ${stateName}`;
     
-    const container = document.getElementById('dataNetworksList');
-    let html = '';
-    
-    const submissions = type === 'inventory' ? submissionStatus.inventory : submissionStatus.dryBoxes;
-    const networksWithData = new Set();
-    
-    Object.values(submissions).forEach(submission => {
-        if (submission.state === stateName) {
-            if (!stateFilter || submission.state === stateFilter) {
-                if (!networkFilter || submission.network === networkFilter) {
-                    networksWithData.add(submission.network);
-                }
-            }
-        }
-    });
-    
-    networksWithData.forEach(network => {
-        const itemCount = getDataItemsCountByNetwork(stateName, network, type);
-        html += `
-            <div class="pending-item" onclick="showDataDetails('${stateName}', '${network}')">
-                <span class="pending-name">${network}</span>
-                <span class="pending-count">${itemCount} registro(s)</span>
-                <span class="pending-arrow">→</span>
-            </div>
-        `;
-    });
-    
-    if (html === '') {
-        html = '<p>Nenhuma rede com dados encontrada.</p>';
-    }
-    
-    container.innerHTML = html;
-}
+    const dataType = document.getElementById('dataType').value;
+    const dataNetworksList = document.getElementById('dataNetworksList');
+    dataNetworksList.innerHTML = 'Carregando redes...';
 
-function showDataDetails(stateName, networkName) {
-    const type = document.getElementById('dataType').value;
-    
-    dataViewState.level = 'details';
-    dataViewState.selectedState = stateName;
-    dataViewState.selectedNetwork = networkName;
-    
-    // Atualizar navegação
-    document.getElementById('backToDataStates').style.display = 'inline-block';
-    document.getElementById('backToDataNetworks').style.display = 'inline-block';
-    
-    // Mostrar apenas a view de detalhes
+    try {
+        const q = query(collection(db, dataType), where("state", "==", stateName));
+        const querySnapshot = await getDocs(q);
+        
+        const networksWithData = new Set();
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.network) networksWithData.add(data.network);
+        });
+
+        if (networksWithData.size === 0) {
+            dataNetworksList.innerHTML = '<p>Nenhuma rede com dados encontrada neste estado.</p>';
+            return;
+        }
+
+        let html = '<ul class="data-drilldown-list">';
+        Array.from(networksWithData).sort().forEach(networkName => {
+            html += `<li><a href="#" onclick="showDataDetails('${stateName}', '${networkName}')">${networkName}</a></li>`;
+        });
+        html += '</ul>';
+        dataNetworksList.innerHTML = html;
+
+    } catch (error) {
+        console.error("Erro ao carregar redes para a visualização:", error);
+        dataNetworksList.innerHTML = '<p class="status-error">Erro ao carregar redes.</p>';
+    }
+}
+window.showDataNetworks = showDataNetworks;
+
+async function showDataDetails(stateName, networkName) {
     document.getElementById('dataStatesView').style.display = 'none';
     document.getElementById('dataNetworksView').style.display = 'none';
     document.getElementById('dataDetailsView').style.display = 'block';
+    document.getElementById('backToDataStates').style.display = 'block';
+    document.getElementById('backToDataNetworks').style.display = 'block';
+    document.getElementById('dataDetailsTitle').textContent = `Dados Detalhados em ${networkName}, ${stateName}`;
     
-    document.getElementById('dataDetailsTitle').textContent = `${networkName} - ${stateName}`;
-    
-    const container = document.getElementById('dataDetailsList');
-    const details = getDataDetails(stateName, networkName, type);
-    
-    let html = '';
-    
-    if (details.length > 0) {
-        details.forEach(detail => {
-            html += `
-                <div class="data-detail-item">
-                    <div class="data-detail-header">
-                        <strong>${detail.store}</strong>
-                        <span class="data-detail-user">Usuário: ${detail.user}</span>
-                        <span class="data-detail-date">Enviado em: ${detail.timestamp.toLocaleString()}</span>
-                    </div>
-                    <div class="data-detail-items">
-                        ${detail.items.map(item => {
-                            if (type === 'inventory') {
-                                return `<div class="data-item">
-                                    <span class="item-product">${item.productType}</span>
-                                    <span class="item-box">${item.boxType}</span>
-                                    <span class="item-quantity">${item.quantity} Caixas</span>
-                                </div>`;
-                            } else {
-                                return `<div class="data-item">
-                                    <span class="item-product">${item.boxType}</span>
-                                    <span class="item-quantity">${item.quantity} Caixas</span>
-                                </div>`;
-                            }
-                        }).join('')}
-                    </div>
-                </div>
-            `;
-        });
-    } else {
-        html = '<p>Nenhum detalhe encontrado.</p>';
-    }
-    
-    container.innerHTML = html;
-}
+    const dataType = document.getElementById('dataType').value;
+    const dataDetailsList = document.getElementById('dataDetailsList');
+    dataDetailsList.innerHTML = 'Carregando detalhes...';
 
-function getDataItemsCountByState(state, type, stateFilter, networkFilter) {
-    const submissions = type === 'inventory' ? submissionStatus.inventory : submissionStatus.dryBoxes;
-    let count = 0;
-    
-    Object.values(submissions).forEach(submission => {
-        if (submission.state === state) {
-            if (!stateFilter || submission.state === stateFilter) {
-                if (!networkFilter || submission.network === networkFilter) {
-                    count++;
-                }
-            }
-        }
-    });
-    
-    return count;
-}
-
-function getDataItemsCountByNetwork(state, network, type) {
-    const submissions = type === 'inventory' ? submissionStatus.inventory : submissionStatus.dryBoxes;
-    let count = 0;
-    
-    Object.values(submissions).forEach(submission => {
-        if (submission.state === state && submission.network === network) {
-            count++;
-        }
-    });
-    
-    return count;
-}
-
-function getDataDetails(state, network, type) {
-    const submissions = type === 'inventory' ? submissionStatus.inventory : submissionStatus.dryBoxes;
-    const details = [];
-    
-    // Buscar nas filas de envio também
-    const queue = type === 'inventory' ? inventorySubmissionQueue : dryBoxesSubmissionQueue;
-    
-    // Adicionar dados das submissões confirmadas
-    Object.values(submissions).forEach(submission => {
-        if (submission.state === state && submission.network === network) {
-            // Buscar itens na fila correspondente
-            const queueItem = queue.find(item => 
-                item.user === submission.user && 
-                item.state === submission.state && 
-                item.network === submission.network &&
-                item.store === submission.store
-            );
-            
-            if (queueItem) {
-                details.push({
-                    user: submission.user,
-                    store: submission.store,
-                    timestamp: submission.timestamp,
-                    items: queueItem.items
-                });
-            }
-        }
-    });
-    
-    return details;
-}
-
-// Funções para esconder listas
-function hideAllUsers() {
-    document.getElementById('searchUser').value = '';
-    document.getElementById('usersList').innerHTML = '<p>Lista ocultada. Clique em "Exibir Todos" para visualizar.</p>';
-}
-
-function hideAllStates() {
-    document.getElementById('searchState').value = '';
-    document.getElementById('statesList').innerHTML = '<p>Lista ocultada. Clique em "Exibir Todos" para visualizar.</p>';
-}
-
-function hideAllNetworks() {
-    document.getElementById('searchNetwork').value = '';
-    document.getElementById('networksList').innerHTML = '<p>Lista ocultada. Clique em "Exibir Todos" para visualizar.</p>';
-}
-
-function hideAllStores() {
-    document.getElementById('searchStore').value = '';
-    document.getElementById('storesList').innerHTML = '<p>Lista ocultada. Clique em "Exibir Todos" para visualizar.</p>';
-}
-
-// Função para salvar todas as configurações
-function saveAllConfigurations() {
     try {
-        // Salvar configurações de horário primeiro
-        saveScheduleSettings();
-        
-        // Atualizar todos os selects do sistema
-        updateConfigSelects();
-        updateStateSelects();
-        updateUserSelects();
-        updateStoreSelects();
-        
-        // Atualizar selects nas abas principais
-        updateNetworksByState();
-        updateUsersByState();
-        updateDryNetworksByState();
-        updateDryUsersByState();
-        
-        // Atualizar visualizações de dados e usuários pendentes
-        initializeDataView();
-        updatePendingView();
-        
-        // Atualizar visualização do gestor
-        updateManagerView();
-        
-        showStatus('Todas as configurações foram salvas e o sistema foi atualizado!', 'success');
-        
-        console.log('Configurações salvas:', {
-            schedule: {
-                inventoryTime: systemConfig.inventoryTime,
-                inventoryDays: systemConfig.inventoryDays,
-                dryBoxesTime: systemConfig.dryBoxesTime,
-                dryBoxesDays: systemConfig.dryBoxesDays
-            },
-            usersByState: systemConfig.usersByState,
-            emails: systemConfig.emails,
-            networksByState: networksByState,
-            storesByNetwork: storesByNetwork
+        const q = query(collection(db, dataType), 
+                        where("state", "==", stateName),
+                        where("network", "==", networkName),
+                        orderBy("timestamp", "desc"));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            dataDetailsList.innerHTML = '<p>Nenhum detalhe encontrado para esta rede e estado.</p>';
+            return;
+        }
+
+        let html = '<ul class="data-list">';
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            const timestamp = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleString() : 'N/A';
+            if (dataType === 'inventory') {
+                html += `<li><strong>${data.productType} (${data.boxType})</strong>: ${data.quantity} caixas - Loja: ${data.store}, Usuário: ${data.user} (${timestamp})</li>`;
+            } else if (dataType === 'dryBoxes') {
+                html += `<li><strong>${data.boxType}</strong>: ${data.quantity} caixas - Loja: ${data.store}, Usuário: ${data.user} (${timestamp})</li>`;
+            }
         });
-        
+        html += '</ul>';
+        dataDetailsList.innerHTML = html;
+
     } catch (error) {
-        console.error('Erro ao salvar configurações:', error);
-        showStatus('Erro ao salvar algumas configurações. Verifique o console para detalhes.', 'error');
+        console.error("Erro ao carregar detalhes dos dados:", error);
+        dataDetailsList.innerHTML = '<p class="status-error">Erro ao carregar detalhes.</p>';
     }
 }
+window.showDataDetails = showDataDetails;
 
-// Funções para seleção múltipla de usuários
-function selectAllUsers() {
-    const checkboxes = document.querySelectorAll('#usersList input[type="checkbox"]');
-    checkboxes.forEach(checkbox => checkbox.checked = true);
+// Voltar na navegação de dados
+window.backToDataStates = loadDataView; // Já existe no HTML
+function backToDataNetworks() {
+    const selectedStateName = document.getElementById('dataState').value;
+    showDataNetworks(selectedStateName);
 }
+window.backToDataNetworks = backToDataNetworks;
 
-function deselectAllUsers() {
-    const checkboxes = document.querySelectorAll('#usersList input[type="checkbox"]');
-    checkboxes.forEach(checkbox => checkbox.checked = false);
-}
 
-function removeSelectedUsers() {
-    const selectedItems = document.querySelectorAll('#usersList input[type="checkbox"]:checked');
-    
-    if (selectedItems.length === 0) {
-        showStatus('Selecione pelo menos um usuário para remover!', 'error');
-        return;
+// --- Funções de Usuários Pendentes (Gestores) ---
+
+async function loadPendingUsersView() {
+    const pendingType = document.getElementById('pendingType').value; // 'inventory' ou 'dryBoxes'
+    const pendingStatesList = document.getElementById('pendingStatesList');
+    const pendingNetworksList = document.getElementById('pendingNetworksList');
+    const pendingUsersList = document.getElementById('pendingUsersList');
+
+    // Esconde tudo e mostra a primeira visão
+    document.getElementById('pendingStatesView').style.display = 'block';
+    document.getElementById('pendingNetworksView').style.display = 'none';
+    document.getElementById('pendingUsersView').style.display = 'none';
+    document.getElementById('backToPendingStates').style.display = 'none';
+    document.getElementById('backToPendingNetworks').style.display = 'none';
+
+    pendingStatesList.innerHTML = 'Carregando estados...';
+
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Zera a hora para comparar o dia
+
+        const usersWhoSubmittedToday = new Set();
+        const qSubmitted = query(
+            collection(db, pendingType),
+            where("timestamp", ">=", today) // Buscar envios de hoje
+        );
+        const submittedSnapshot = await getDocs(qSubmitted);
+        submittedSnapshot.forEach(doc => {
+            usersWhoSubmittedToday.add(doc.data().userId);
+        });
+
+        // Filtrar usuários que NÃO enviaram hoje
+        const usersNotSubmitted = allUsers.filter(user => !usersWhoSubmittedToday.has(user.id));
+        
+        const statesWithPendingUsers = new Set();
+        usersNotSubmitted.forEach(user => {
+            const state = allStates.find(s => s.id === user.stateId);
+            if (state) statesWithPendingUsers.add(state.name);
+        });
+
+        if (statesWithPendingUsers.size === 0) {
+            pendingStatesList.innerHTML = '<p>Todos os usuários enviaram para o tipo selecionado.</p>';
+            return;
+        }
+
+        let html = '<ul class="data-drilldown-list">';
+        Array.from(statesWithPendingUsers).sort().forEach(stateName => {
+            html += `<li><a href="#" onclick="showPendingNetworks('${stateName}', '${pendingType}')">${stateName}</a></li>`;
+        });
+        html += '</ul>';
+        pendingStatesList.innerHTML = html;
+
+    } catch (error) {
+        console.error("Erro ao carregar usuários pendentes:", error);
+        pendingStatesList.innerHTML = '<p class="status-error">Erro ao carregar usuários pendentes.</p>';
     }
+}
+window.loadPendingUsersView = loadPendingUsersView;
+
+async function showPendingNetworks(stateName, pendingType) {
+    document.getElementById('pendingStatesView').style.display = 'none';
+    document.getElementById('pendingNetworksView').style.display = 'block';
+    document.getElementById('pendingUsersView').style.display = 'none';
+    document.getElementById('backToPendingStates').style.display = 'block';
+    document.getElementById('backToPendingNetworks').style.display = 'none';
+    document.getElementById('pendingNetworksTitle').textContent = `Redes com Usuários Pendentes em ${stateName}`;
     
-    if (confirm(`Tem certeza que deseja remover ${selectedItems.length} usuário(s) selecionado(s)?`)) {
-        selectedItems.forEach(checkbox => {
-            const username = checkbox.dataset.username;
-            const state = checkbox.dataset.state;
-            
-            if (systemConfig.usersByState[state]) {
-                systemConfig.usersByState[state] = systemConfig.usersByState[state].filter(user => user !== username);
+    const pendingNetworksList = document.getElementById('pendingNetworksList');
+    pendingNetworksList.innerHTML = 'Carregando redes...';
+
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const usersWhoSubmittedToday = new Set();
+        const qSubmitted = query(
+            collection(db, pendingType),
+            where("timestamp", ">=", today),
+            where("state", "==", stateName)
+        );
+        const submittedSnapshot = await getDocs(qSubmitted);
+        submittedSnapshot.forEach(doc => {
+            usersWhoSubmittedToday.add(doc.data().userId);
+        });
+
+        const stateDoc = allStates.find(s => s.name === stateName);
+        const networksInState = allNetworks.filter(n => n.stateId === stateDoc.id);
+
+        const networksWithPendingUsers = new Set();
+        for (const network of networksInState) {
+            const usersInNetwork = allUsers.filter(u => u.stateId === stateDoc.id && allStores.some(s => s.networkId === network.id && s.name === u.store)); // Simplificado: assumindo que user.store é o nome da loja
+            // Melhor: filtrar usuários por rede baseando-se em `storeId` se sua estrutura de `users` incluir isso
+            // Ex: const usersInNetwork = allUsers.filter(u => u.stateId === stateDoc.id && u.networkId === network.id);
+
+            const pendingUsersInNetwork = usersInNetwork.filter(user => !usersWhoSubmittedToday.has(user.id));
+            if (pendingUsersInNetwork.length > 0) {
+                networksWithPendingUsers.add(network.name);
             }
+        }
+
+        if (networksWithPendingUsers.size === 0) {
+            pendingNetworksList.innerHTML = '<p>Nenhuma rede com usuários pendentes neste estado.</p>';
+            return;
+        }
+
+        let html = '<ul class="data-drilldown-list">';
+        Array.from(networksWithPendingUsers).sort().forEach(networkName => {
+            html += `<li><a href="#" onclick="showPendingUsers('${stateName}', '${networkName}', '${pendingType}')">${networkName}</a></li>`;
         });
-        
-        updateUsersList();
-        updateUserSelects();
-        showStatus(`${selectedItems.length} usuário(s) removido(s) com sucesso!`, 'success');
+        html += '</ul>';
+        pendingNetworksList.innerHTML = html;
+
+    } catch (error) {
+        console.error("Erro ao carregar redes para usuários pendentes:", error);
+        pendingNetworksList.innerHTML = '<p class="status-error">Erro ao carregar redes.</p>';
     }
 }
+window.showPendingNetworks = showPendingNetworks;
 
-// Funções para seleção múltipla de estados
-function selectAllStates() {
-    const checkboxes = document.querySelectorAll('#statesList input[type="checkbox"]');
-    checkboxes.forEach(checkbox => checkbox.checked = true);
-}
-
-function deselectAllStates() {
-    const checkboxes = document.querySelectorAll('#statesList input[type="checkbox"]');
-    checkboxes.forEach(checkbox => checkbox.checked = false);
-}
-
-function removeSelectedStates() {
-    const selectedItems = document.querySelectorAll('#statesList input[type="checkbox"]:checked');
+async function showPendingUsers(stateName, networkName, pendingType) {
+    document.getElementById('pendingStatesView').style.display = 'none';
+    document.getElementById('pendingNetworksView').style.display = 'none';
+    document.getElementById('pendingUsersView').style.display = 'block';
+    document.getElementById('backToPendingStates').style.display = 'block';
+    document.getElementById('backToPendingNetworks').style.display = 'block';
+    document.getElementById('pendingUsersTitle').textContent = `Usuários Pendentes em ${networkName}, ${stateName}`;
     
-    if (selectedItems.length === 0) {
-        showStatus('Selecione pelo menos um estado para remover!', 'error');
-        return;
-    }
-    
-    if (confirm(`Tem certeza que deseja remover ${selectedItems.length} estado(s) selecionado(s) e todas suas redes?`)) {
-        selectedItems.forEach(checkbox => {
-            const stateName = checkbox.dataset.state;
-            
-            // Remover todas as redes associadas ao estado
-            if (networksByState[stateName]) {
-                networksByState[stateName].forEach(network => {
-                    delete storesByNetwork[network];
-                });
-            }
-            
-            delete networksByState[stateName];
+    const pendingUsersList = document.getElementById('pendingUsersList');
+    pendingUsersList.innerHTML = 'Carregando usuários...';
+
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const usersWhoSubmittedToday = new Set();
+        const qSubmitted = query(
+            collection(db, pendingType),
+            where("timestamp", ">=", today),
+            where("state", "==", stateName),
+            where("network", "==", networkName) // Assumindo que o campo 'network' está no documento de envio
+        );
+        const submittedSnapshot = await getDocs(qSubmitted);
+        submittedSnapshot.forEach(doc => {
+            usersWhoSubmittedToday.add(doc.data().userId);
         });
-        
-        updateStatesList();
-        showStatus(`${selectedItems.length} estado(s) removido(s) com sucesso!`, 'success');
-    }
-}
 
-// Funções para seleção múltipla de redes
-function selectAllNetworks() {
-    const checkboxes = document.querySelectorAll('#networksList input[type="checkbox"]');
-    checkboxes.forEach(checkbox => checkbox.checked = true);
-}
+        const stateDoc = allStates.find(s => s.name === stateName);
+        const networkDoc = allNetworks.find(n => n.name === networkName && n.stateId === stateDoc.id);
 
-function deselectAllNetworks() {
-    const checkboxes = document.querySelectorAll('#networksList input[type="checkbox"]');
-    checkboxes.forEach(checkbox => checkbox.checked = false);
-}
+        let usersInThisNetworkAndState = [];
+        if (stateDoc && networkDoc) {
+            // Este filtro é uma suposição, a precisão depende de como 'users' estão ligados a 'stores' e 'networks'
+            // Idealmente, seu objeto 'user' teria 'stateId' e 'networkId' diretamente para facilitar.
+            usersInThisNetworkAndState = allUsers.filter(u => 
+                u.stateId === stateDoc.id && 
+                allStores.some(s => s.networkId === networkDoc.id && s.id === u.storeId) // Se user tiver 'storeId'
+            );
+        }
 
-function removeSelectedNetworks() {
-    const selectedItems = document.querySelectorAll('#networksList input[type="checkbox"]:checked');
-    
-    if (selectedItems.length === 0) {
-        showStatus('Selecione pelo menos uma rede para remover!', 'error');
-        return;
-    }
-    
-    if (confirm(`Tem certeza que deseja remover ${selectedItems.length} rede(s) selecionada(s) e todas suas lojas?`)) {
-        selectedItems.forEach(checkbox => {
-            const networkName = checkbox.dataset.network;
-            
-            // Remover das redes por estado
-            Object.keys(networksByState).forEach(state => {
-                networksByState[state] = networksByState[state].filter(network => network !== networkName);
-            });
-            
-            // Remover das lojas por rede
-            delete storesByNetwork[networkName];
+        const pendingUsers = usersInThisNetworkAndState.filter(user => !usersWhoSubmittedToday.has(user.id));
+
+        if (pendingUsers.length === 0) {
+            pendingUsersList.innerHTML = '<p>Nenhum usuário pendente nesta rede e estado.</p>';
+            return;
+        }
+
+        let html = '<ul class="data-list">';
+        pendingUsers.sort((a,b) => a.name.localeCompare(b.name)).forEach(user => {
+            html += `<li>${user.name}</li>`;
         });
-        
-        updateNetworksList();
-        updateConfigSelects();
-        showStatus(`${selectedItems.length} rede(s) removida(s) com sucesso!`, 'success');
+        html += '</ul>';
+        pendingUsersList.innerHTML = html;
+
+    } catch (error) {
+        console.error("Erro ao carregar usuários pendentes detalhados:", error);
+        pendingUsersList.innerHTML = '<p class="status-error">Erro ao carregar usuários.</p>';
     }
 }
+window.showPendingUsers = showPendingUsers;
 
-// Funções para seleção múltipla de lojas
-function selectAllStores() {
-    const checkboxes = document.querySelectorAll('#storesList input[type="checkbox"]');
-    checkboxes.forEach(checkbox => checkbox.checked = true);
+// Voltar na navegação de pendências
+window.backToPendingStates = loadPendingUsersView;
+function backToPendingNetworks() {
+    const selectedStateName = document.getElementById('pendingState').value; // Você precisaria de um select 'pendingState' para isso
+    // Por enquanto, apenas recarrega a visão principal de pendentes
+    loadPendingUsersView();
 }
+window.backToPendingNetworks = backToPendingNetworks;
 
-function deselectAllStores() {
-    const checkboxes = document.querySelectorAll('#storesList input[type="checkbox"]');
-    checkboxes.forEach(checkbox => checkbox.checked = false);
-}
 
-function removeSelectedStores() {
-    const selectedItems = document.querySelectorAll('#storesList input[type="checkbox"]:checked');
+// --- Event Listeners e Inicialização ---
+document.addEventListener('DOMContentLoaded', async () => {
+    // Carrega todos os dados mestres do Firestore ao iniciar a página
+    await loadMasterData();
     
-    if (selectedItems.length === 0) {
-        showStatus('Selecione pelo menos uma loja para remover!', 'error');
-        return;
+    // Inicia os contadores (usando os horários carregados ou padrão)
+    const [invHour, invMin] = currentSchedule.inventory.time.split(':').map(Number);
+    startCountdown('inventoryCountdown', invHour, invMin);
+    
+    const [dryHour, dryMin] = currentSchedule.dryBoxes.time.split(':').map(Number);
+    // Para caixas secas, se segunda-feira estiver nos dias de envio agendados, use a lógica de dia da semana
+    if (currentSchedule.dryBoxes.days.includes(1)) { // 1 = Segunda-feira
+        startCountdown('dryBoxesCountdown', dryHour, dryMin, 1); 
+    } else {
+        startCountdown('dryBoxesCountdown', dryHour, dryMin); // Comportamento padrão (dia atual)
+    }
+
+    // Inicializa os dropdowns dos formulários de entrada
+    loadStatesForForms();
+
+    // Adiciona event listeners aos formulários
+    const stockForm = document.getElementById('stockForm');
+    if (stockForm) {
+        stockForm.addEventListener('submit', submitInventoryForm);
+    }
+
+    const dryBoxesForm = document.getElementById('dryBoxesForm');
+    if (dryBoxesForm) {
+        dryBoxesForm.addEventListener('submit', submitDryBoxesForm);
     }
     
-    if (confirm(`Tem certeza que deseja remover ${selectedItems.length} loja(s) selecionada(s)?`)) {
-        selectedItems.forEach(checkbox => {
-            const storeName = checkbox.dataset.store;
-            
-            Object.keys(storesByNetwork).forEach(network => {
-                storesByNetwork[network] = storesByNetwork[network].filter(store => store !== storeName);
-            });
-        });
-        
-        updateStoresList();
-        showStatus(`${selectedItems.length} loja(s) removida(s) com sucesso!`, 'success');
-    }
-}
+    // Carregar os últimos itens adicionados para as listas
+    loadLatestInventoryItems();
+    loadLatestDryBoxItems();
 
-// Funções para seleção múltipla de emails
-function selectAllEmails() {
-    const checkboxes = document.querySelectorAll('#emailsList input[type="checkbox"]');
-    checkboxes.forEach(checkbox => checkbox.checked = true);
-}
+    // Inicializa a primeira aba
+    showTab('inventory');
 
-function deselectAllEmails() {
-    const checkboxes = document.querySelectorAll('#emailsList input[type="checkbox"]');
-    checkboxes.forEach(checkbox => checkbox.checked = false);
-}
-
-function removeSelectedEmails() {
-    const selectedItems = document.querySelectorAll('#emailsList input[type="checkbox"]:checked');
-    
-    if (selectedItems.length === 0) {
-        showStatus('Selecione pelo menos um email para remover!', 'error');
-        return;
-    }
-    
-    if (confirm(`Tem certeza que deseja remover ${selectedItems.length} email(s) selecionado(s)?`)) {
-        selectedItems.forEach(checkbox => {
-            const emailAddress = checkbox.dataset.email;
-            systemConfig.emails = systemConfig.emails.filter(e => e.address !== emailAddress);
-        });
-        
-        updateEmailsList();
-        showStatus(`${selectedItems.length} email(s) removido(s) com sucesso!`, 'success');
-    }
-}
-
-// Inicialização
-document.addEventListener('DOMContentLoaded', function() {
-    updateInventoryDisplay();
-    updateDryBoxesDisplay();
-    updateSubmissionStatus();
-    
-    // Atualizar contagens regressivas a cada segundo
-    setInterval(updateCountdowns, 1000);
-    
-    // Verificar envios automáticos a cada minuto
-    setInterval(processAutomaticSubmissions, 60000);
-    
-    updateCountdowns();
-    
-    console.log('Sistema de contagem de estoque inicializado');
+    // Inicializa os dropdowns da área de configuração quando a página carrega
+    loadStatesForConfigDropdowns();
+    loadNetworksInConfig(); // Precisa ser chamado para popular o filtro de rede na config
+    loadStoresInConfig();
+    loadEmailsInConfig();
+    applyScheduleSettingsToUI();
 });
+
+// Exponha funções globais para o HTML (se usadas com onclick, onchange, etc.)
+window.showTab = showTab;
+window.showManagerTab = showManagerTab;
+window.loadNetworksAndUsersForInventory = loadNetworksAndUsersForInventory;
+window.loadStoresForInventory = loadStoresForInventory;
+window.loadNetworksAndUsersForDryBoxes = loadNetworksAndUsersForDryBoxes;
+window.loadStoresForDryBoxes = loadStoresForDryBoxes;
+
+// Funções de gerenciamento expostas globalmente
+window.loadUsersInConfig = loadUsersInConfig;
+window.searchUsers = searchUsers;
+window.selectAllUsers = selectAllUsers;
+window.deselectAllUsers = deselectAllUsers;
+window.removeSelectedUsers = removeSelectedUsers;
+
+window.loadStatesInConfig = loadStatesInConfig;
+window.searchStates = searchStates;
+window.selectAllStates = selectAllStates;
+window.deselectAllStates = deselectAllStates;
+window.removeSelectedStates = removeSelectedStates;
+
+window.loadNetworksInConfig = loadNetworksInConfig;
+window.searchNetworks = searchNetworks;
+window.selectAllNetworks = selectAllNetworks;
+window.deselectAllNetworks = deselectAllNetworks;
+window.removeSelectedNetworks = removeSelectedNetworks;
+
+window.loadStoresInConfig = loadStoresInConfig;
+window.searchStores = searchStores;
+window.selectAllStores = selectAllStores;
+window.deselectAllStores = deselectAllStores;
+window.removeSelectedStores = removeSelectedStores;
+
+window.loadEmailsInConfig = loadEmailsInConfig;
+window.selectAllEmails = selectAllEmails;
+window.deselectAllEmails = deselectAllEmails;
+window.removeSelectedEmails = removeSelectedEmails;
+
+window.loadDataView = loadDataView;
+window.loadNetworksForDataView = loadNetworksForDataView;
+window.loadPendingUsersView = loadPendingUsersView;
